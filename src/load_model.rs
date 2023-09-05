@@ -1,49 +1,58 @@
-use glium;
+use glium::{self, vertex::VertexBuffer};
+use std::iter::zip;
 use tobj;
 
-use crate::teapot::INDICES;
+fn load_model(model_name: &str, display: &dyn glium::backend::Facade) {
+    #[derive(Copy, Clone)]
+    struct Vertex {
+        pos: [f32; 3],
+        nor: [f32; 3],
+        tex: [f32; 3],
+    }
+    implement_vertex!(Vertex, pos, nor, tex);
 
-pub struct Mesh<T>
-{
-    positions: glium::VertexBuffer<f32>,
-    normals: glium::VertexBuffer<f32>,
-    texcoords: glium::VertexBuffer<f32>,
-    indices: glium::IndexBuffer<i8>
-}
+    let model = tobj::load_obj(model_name, &tobj::GPU_LOAD_OPTIONS);
 
-fn load_model<F>(model_name: &str, display: &F)
-{
-    let mut model = tobj::load_obj(model_name, &tobj::GPU_LOAD_OPTIONS);
-
-    let (models, materials) = model.expect(
-        &format!("Failed to import: {}", model_name)
-    );
+    let (models, materials) = model.expect(&format!("Failed to import: {}", model_name));
 
     let materials = materials.expect("The given file is not a MTL file.");
 
-    let mut meshes = vec![];
-    meshes.reserve_exact(models.len());
-    let mut materials = vec![1, 2, 3];
-    materials.reserve_exact(materials.len());
+    let mut vertexbuffers = Vec::<VertexBuffer<Vertex>>::new();
+    vertexbuffers.reserve_exact(models.len());
+    for model in &models {
+        let mut min_pos = [f32::INFINITY; 3];
+        let mut max_pos = [f32::INFINITY; 3];
+        let mut vertexes = Vec::<Vertex>::new();
+        vertexes.reserve_exact(model.mesh.positions.len() / 3);
 
-    for (i, m) in models.iter().enumerate() {
-        meshes[i] = Mesh {
-            positions: glium::VertexBuffer::new(
-                &display,
-                &m.mesh.positions
-            ),
-            normals: glium::VertexBuffer::new(
-                &display,
-                &m.mesh.normals
-            ),
-            texcoords: glium::VertexBuffer::new(
-                &display,
-                &m.mesh.texcoords
-            ),
-            indices: glium::IndexBuffer::new(
-                &display,
-                &m.mesh.indices
-            )
-        };
+        let mesh = &model.mesh;
+        for ((pos, nor), tex) in zip(
+            zip(mesh.positions.chunks(3), mesh.normals.chunks(3)),
+            mesh.texcoords.chunks(3),
+        ) {
+            vertexes.push(Vertex {
+                pos: Default::default(),
+                nor: Default::default(),
+                tex: Default::default(),
+            });
+            vertexes.last_mut().unwrap().pos.clone_from_slice(pos);
+            vertexes.last_mut().unwrap().nor.clone_from_slice(nor);
+            vertexes.last_mut().unwrap().tex.clone_from_slice(tex);
+
+            min_pos = zip(min_pos, pos)
+                .map(|(x, y)| f32::min(x, *y))
+                .collect::<Vec<f32>>()
+                .try_into()
+                .unwrap();
+            max_pos = zip(max_pos, pos)
+                .map(|(x, y)| f32::min(x, *y))
+                .collect::<Vec<f32>>()
+                .try_into()
+                .unwrap();
+        }
+
+        // Traverse the vertexes vector again, but this time rescaling the position to fit the -1~1 window.
+
+        vertexbuffers.push(glium::VertexBuffer::<Vertex>::new(display, &vertexes).unwrap());
     }
 }
