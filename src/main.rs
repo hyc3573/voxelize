@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate glium;
 use glium::Surface;
+use crate::load_model::load_model;
 
 mod teapot;
 mod load_model;
@@ -22,6 +23,8 @@ fn main() {
     )
     .unwrap();
 
+    let model = load_model("teapot.mtl", &display);
+
     let frag = include_str!("fragshader.glsl");
     let vert = include_str!("vertexshader.glsl");
 
@@ -41,8 +44,8 @@ fn main() {
 
         target
             .draw(
-                (&positions, &normals),
-                &indices,
+                &model[0].0,
+                &model[0].1,
                 &program,
                 &uniform! {matrix: matrix},
                 &Default::default(),
