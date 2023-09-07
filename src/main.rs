@@ -1,10 +1,12 @@
 #[macro_use]
 extern crate glium;
-use glium::Surface;
 use crate::load_model::load_model;
+use glium::Surface;
+use glam::{Mat4, Quat, Vec3};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-mod teapot;
 mod load_model;
+mod teapot;
 
 fn main() {
     use glium::glutin;
@@ -23,34 +25,39 @@ fn main() {
     )
     .unwrap();
 
-    let model = load_model("teapot.mtl", &display);
+    let model = load_model("spoon.obj", &display);
 
     let frag = include_str!("fragshader.glsl");
     let vert = include_str!("vertexshader.glsl");
+    let geom = include_str!("geomshader.glsl");
 
-    let program = glium::Program::from_source(&display, vert, frag, None).unwrap();
+    let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
+
+    let t = std::time::Instant::now();
 
     event_loop.run(move |ev, _, control_flow| {
-        let matrix = [
-            [0.01, 0.0, 0.0, 0.0],
-            [0.0, 0.01, 0.0, 0.0],
-            [0.0, 0.0, 0.01, 0.0],
-            [0.0, 0.0, 0.0, 1.0f32],
-        ];
+        let m = Mat4::from_axis_angle(
+            Vec3::new(f32::sqrt(2.0)/2., f32::sqrt(2.0)/2., 0.),
+            t.elapsed().as_secs_f32()
+        );
+        let v = Mat4::from_scale(Vec3::new(0.1, 0.1, 0.1));
+        let p = Mat4::IDENTITY;
 
         let mut target = display.draw();
 
         target.clear_color(0.0, 0.0, 0.0, 1.0);
 
-        target
-            .draw(
-                &model[0].0,
-                &model[0].1,
-                &program,
-                &uniform! {matrix: matrix},
-                &Default::default(),
-            )
-            .unwrap();
+        for i in 0..model.len() {
+            target
+                .draw(
+                    &model[i].0,
+                    &model[i].1,
+                    &program,
+                    &uniform! {M: m.to_cols_array_2d(), V: v.to_cols_array_2d(), P: p.to_cols_array_2d()},
+                    &Default::default(),
+                )
+                .unwrap();
+        }
 
         target.finish().unwrap();
 

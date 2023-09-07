@@ -6,7 +6,7 @@ use tobj;
 pub struct Vertex {
     pos: [f32; 3],
     nor: [f32; 3],
-    tex: [f32; 3],
+    tex: [f32; 2],
 }
 implement_vertex!(Vertex, pos, nor, tex);
 
@@ -18,7 +18,7 @@ pub fn load_model(
 
     let (models, materials) = model.expect(&format!("Failed to import: {}", model_name));
 
-    let materials = materials.expect("The given file is not a MTL file.");
+    // let materials = materials.expect("The given file is not a MTL file.");
 
     let mut buffers = Vec::<(VertexBuffer<Vertex>, IndexBuffer<u32>)>::new();
     buffers.reserve_exact(models.len());
@@ -27,9 +27,10 @@ pub fn load_model(
         vertexes.reserve_exact(model.mesh.positions.len() / 3);
 
         let mesh = &model.mesh;
+        
         for ((pos, nor), tex) in zip(
             zip(mesh.positions.chunks(3), mesh.normals.chunks(3)),
-            mesh.texcoords.chunks(3),
+            mesh.texcoords.chunks(2),
         ) {
             vertexes.push(Vertex {
                 pos: Default::default(),
@@ -52,5 +53,5 @@ pub fn load_model(
         ));
     }
 
-    return buffers;
+    buffers
 }
