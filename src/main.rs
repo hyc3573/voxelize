@@ -24,15 +24,6 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let positions = glium::VertexBuffer::new(&display, &teapot::VERTICES).unwrap();
-    let normals = glium::VertexBuffer::new(&display, &teapot::NORMALS).unwrap();
-    let indices = glium::IndexBuffer::new(
-        &display,
-        glium::index::PrimitiveType::TrianglesList,
-        &teapot::INDICES,
-    )
-    .unwrap();
-
     let model = load_model("spoon.obj", &display);
 
     let frag = include_str!("fragshader.glsl");
@@ -41,6 +32,27 @@ fn main() {
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
 
+    #[derive(Copy, Clone)]
+    struct Vertex {
+        pos: [f32; 2],
+    }
+    implement_vertex!(Vertex, pos);
+
+    let fullscreen_rect = [
+        Vertex {pos: [-1., 1.]},
+        Vertex {pos: [1., 1.]},
+        Vertex {pos: [-1., -1.]},
+        Vertex {pos: [1., 1.]},
+        Vertex {pos: [1., -1.]},
+        Vertex {pos: [-1., -1.]},
+    ];
+    let fullscreen_rect = glium::VertexBuffer::new(&display, &fullscreen_rect).unwrap();
+    let fullscreen_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+    let gridvert = include_str!("voxelgrid.vert");
+    let gridfrag = include_str!("voxelgrid.frag");
+    
+    let gridprog = glium::Program::from_source(&display, gridvert, gridfrag, None).unwrap();
+    
     let t = std::time::Instant::now();
 
     let mut imunit_behav: glium::uniforms::ImageUnitBehavior = Default::default();
@@ -61,7 +73,7 @@ fn main() {
         let p = glm::ortho::<f32>(-1., 1., -1., 1., 0.01, 100.);
         // let p = glm::Mat4::identity();
 
-        let voxelgrid = glium::texture::texture3d::Texture3d::empty(&display, 64, 64, 64).unwrap();
+        let voxelgrid = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap,64, 64, 64).unwrap();
 
         let mut target = display.draw();
 
@@ -77,14 +89,27 @@ fn main() {
                         M: *m.as_ref(),
                         V: *v.as_ref(),
                         P: *p.as_ref(),
-                        grid: glium::uniforms::ImageUnit(
-                            &voxelgrid,
-                            imunit_behav
+                        grid: voxelgrid.image_unit(
+                            glium::uniforms::ImageUnitFormat::RGBA32F
+                        ).unwrap().set_access(
+                            glium::uniforms::ImageUnitAccess::Write
                         )
                     },
                     &Default::default(),
-                )
-                .unwrap();
+                ).unwrap();
+        }
+
+        for i in 0..64 {
+            target.draw(
+                &fullscreen_rect,
+                fullscreen_ind,
+                &gridprog,
+                &uniform! {
+                    grid: &voxelgrid,
+                    depth: i
+                },
+                &Default::default()
+            ).unwrap();
         }
 
         target.finish().unwrap();
