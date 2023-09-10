@@ -4,7 +4,7 @@ use crate::load_model::load_model;
 use glam::{Mat4, Quat, Vec3};
 use glium::{
     uniforms::{ImageUnitAccess, ImageUnitFormat},
-    Surface,
+    Surface, texture::TextureAnyImage,
 };
 use glm::normalize;
 use nalgebra_glm as glm;
@@ -70,10 +70,11 @@ fn main() {
             &glm::vec3(1., 1., 1.),
         );
         let v = glm::translation::<f32>(&glm::vec3(0., 0., 0.));
-        let p = glm::ortho::<f32>(-1., 1., -1., 1., 0.01, 100.);
+        let p = glm::ortho::<f32>(-1., 1., -1., 1., 1., -1.);
         // let p = glm::Mat4::identity();
 
-        let voxelgrid = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap,64, 64, 64).unwrap();
+        let empty = vec![vec![vec![(0., 0., 0., 0.); 64]; 64]; 64];
+        let voxelgrid = glium::texture::texture3d::Texture3d::with_format(&display, empty, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap).unwrap();
 
         let mut target = display.draw();
 
