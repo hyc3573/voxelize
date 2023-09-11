@@ -1,20 +1,18 @@
 #[macro_use]
 extern crate glium;
+use std::rc::Rc;
+
 use crate::load_model::load_model;
-use glam::{Mat4, Quat, Vec3};
 use glium::{
     uniforms::{ImageUnitAccess, ImageUnitFormat},
-    Surface, texture::TextureAnyImage,
+    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer},
 };
-use glm::normalize;
 use nalgebra_glm as glm;
-use std::{
-    default,
-    time::{SystemTime, UNIX_EPOCH},
-};
 
 mod load_model;
 mod teapot;
+
+const GWIDTH: u16 = 256;
 
 fn main() {
     use glium::glutin;
@@ -24,7 +22,7 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let model = load_model("spoon.obj", &display);
+    let model = load_model("shion.obj", &display);
 
     let frag = include_str!("fragshader.glsl");
     let vert = include_str!("vertexshader.glsl");
@@ -52,6 +50,12 @@ fn main() {
     let gridfrag = include_str!("voxelgrid.frag");
     
     let gridprog = glium::Program::from_source(&display, gridvert, gridfrag, None).unwrap();
+
+    let clearvert = include_str!("gridclear.vert");
+    let clearfrag = include_str!("gridclear.frag");
+    let clearprog = glium::Program::from_source(
+        &display, clearvert, clearfrag, None
+    ).unwrap();
     
     let t = std::time::Instant::now();
 
@@ -61,27 +65,45 @@ fn main() {
     imunit_behav.format = ImageUnitFormat::RGBA32F;
     let imunit_behav = imunit_behav;
 
+    let empty = vec![vec![vec![(0., 0., 0., 0.); GWIDTH.into()]; GWIDTH.into()]; GWIDTH.into()];
+    let voxelgrid = glium::texture::texture3d::Texture3d::with_format(&display, empty, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap).unwrap();
+
+    let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
+        &display,
+        GWIDTH.into(),
+        GWIDTH.into(),
+        None, None, false
+    ).unwrap();
+
     event_loop.run(move |ev, _, control_flow| {
         let m = glm::scale::<f32>(
             &glm::rotation(
-                t.elapsed().as_secs_f32(),
-                &glm::vec3(1., 1., 0.).normalize(),
-            ),
-            &glm::vec3(1., 1., 1.),
+                t.elapsed().as_secs_f32()/2., &glm::vec3(0., 1., 0.)
+            ), &glm::vec3(0.1, 0.1, 0.1),
         );
-        let v = glm::translation::<f32>(&glm::vec3(0., 0., 0.));
-        let p = glm::ortho::<f32>(-1., 1., -1., 1., 1., -1.);
-        // let p = glm::Mat4::identity();
+        let v = glm::translation::<f32>(&glm::vec3(0., -1., 1.));
+        let p = glm::ortho::<f32>(-1., 1., -1., 1., 0., -2.);
+        // let voxelgrid = glium::texture::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
 
-        let empty = vec![vec![vec![(0., 0., 0., 0.); 64]; 64]; 64];
-        let voxelgrid = glium::texture::texture3d::Texture3d::with_format(&display, empty, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap).unwrap();
-
-        let mut target = display.draw();
-
-        target.clear_color(0.0, 0.0, 0.0, 1.0);
+        for i in 0..i32::from(GWIDTH) {
+            framebuffer.draw(
+                &fullscreen_rect,
+                fullscreen_ind,
+                &clearprog,
+                &uniform! {
+                    grid: voxelgrid.image_unit(
+                            glium::uniforms::ImageUnitFormat::RGBA32F
+                        ).unwrap().set_access(
+                            glium::uniforms::ImageUnitAccess::Write
+                    ),
+                    depth: i,
+                },
+                &Default::default()
+            ).unwrap();
+        }
 
         for i in 0..model.len() {
-            target
+            framebuffer
                 .draw(
                     &model[i].0,
                     &model[i].1,
@@ -94,20 +116,29 @@ fn main() {
                             glium::uniforms::ImageUnitFormat::RGBA32F
                         ).unwrap().set_access(
                             glium::uniforms::ImageUnitAccess::Write
-                        )
+                        ),
+                        GWIDTH: GWIDTH
                     },
                     &Default::default(),
                 ).unwrap();
         }
 
-        for i in 0..64 {
+        let mut target = display.draw();
+
+        target.clear_color(0.0, 0.0, 0.0, 1.0);
+
+        for i in 0..i32::from(GWIDTH) {
             target.draw(
                 &fullscreen_rect,
                 fullscreen_ind,
                 &gridprog,
                 &uniform! {
-                    grid: &voxelgrid,
-                    depth: i
+                    grid: glium::uniforms::Sampler::new(&voxelgrid)
+                        .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest)
+                        .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
+                        .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
+                    depth: i,
+                    GWIDTH: GWIDTH
                 },
                 &Default::default()
             ).unwrap();
