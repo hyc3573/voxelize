@@ -18,20 +18,18 @@ pub fn load_model(
 
     let (models, materials) = model.expect(&format!("Failed to import: {}", model_name));
 
-    // let materials = materials.expect("The given file is not a MTL file.");
-
     let mut buffers = Vec::<(VertexBuffer<Vertex>, IndexBuffer<u32>)>::new();
     buffers.reserve_exact(models.len());
     for model in &models {
-        let mut vertexes = Vec::<Vertex>::new();
-        vertexes.reserve_exact(model.mesh.positions.len() / 3);
+        let mut vertexes = Vec::<Vertex>::new(); // 꼭짓점 벡터 생성
+        vertexes.reserve_exact(model.mesh.positions.len() / 3); // 미리 최대 크기 지정
 
         let mesh = &model.mesh;
         
         for ((pos, nor), tex) in zip(
             zip(mesh.positions.chunks(3), mesh.normals.chunks(3)),
             mesh.texcoords.chunks(2),
-        ) {
+        ) /* 모델에 있는 위치, 법선벡터, 텍스쳐 좌표 데이터를 묶어서 반복 */ {
             vertexes.push(Vertex {
                 pos: Default::default(),
                 nor: Default::default(),
@@ -40,6 +38,7 @@ pub fn load_model(
             vertexes.last_mut().unwrap().pos.clone_from_slice(pos);
             vertexes.last_mut().unwrap().nor.clone_from_slice(nor);
             vertexes.last_mut().unwrap().tex.clone_from_slice(tex);
+            // 꼭짓점 벡터에 저장
         }
 
         buffers.push((
@@ -50,7 +49,7 @@ pub fn load_model(
                 mesh.indices.as_slice(),
             )
             .unwrap(),
-        ));
+        )); // OpenGL Vertex Buffer Object 생성
     }
 
     buffers
