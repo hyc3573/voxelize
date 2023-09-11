@@ -10,7 +10,6 @@ use glium::{
 use nalgebra_glm as glm;
 
 mod load_model;
-mod teapot;
 
 const GWIDTH: u16 = 256;
 
@@ -22,11 +21,11 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let model = load_model("shion.obj", &display);
+    let model = load_model("models/shion.obj", &display);
 
-    let frag = include_str!("fragshader.glsl");
-    let vert = include_str!("vertexshader.glsl");
-    let geom = include_str!("geomshader.glsl");
+    let frag = include_str!("shaders/voxelize.frag");
+    let vert = include_str!("shaders/voxelize.vert");
+    let geom = include_str!("shaders/voxelize.geom");
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
 
@@ -46,13 +45,13 @@ fn main() {
     ];
     let fullscreen_rect = glium::VertexBuffer::new(&display, &fullscreen_rect).unwrap();
     let fullscreen_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-    let gridvert = include_str!("voxelgrid.vert");
-    let gridfrag = include_str!("voxelgrid.frag");
+    let gridvert = include_str!("shaders/voxelgrid.vert");
+    let gridfrag = include_str!("shaders/voxelgrid.frag");
     
     let gridprog = glium::Program::from_source(&display, gridvert, gridfrag, None).unwrap();
 
-    let clearvert = include_str!("gridclear.vert");
-    let clearfrag = include_str!("gridclear.frag");
+    let clearvert = include_str!("shaders/gridclear.vert");
+    let clearfrag = include_str!("shaders/gridclear.frag");
     let clearprog = glium::Program::from_source(
         &display, clearvert, clearfrag, None
     ).unwrap();
