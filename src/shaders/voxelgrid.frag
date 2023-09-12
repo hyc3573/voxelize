@@ -8,5 +8,5 @@ void main() {
     vec4 temp = texture(grid, texcoord);
     if (temp.a < 0.1)
         discard;
-    color = vec4(temp.rgb*texcoord.z, 1.0);
+    color = vec4(temp.rgb, 1.0);
 }

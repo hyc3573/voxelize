@@ -6,6 +6,8 @@ in vec2 tex;
 // 입력 매개변수 선언
 
 out vec3 position;
+out vec3 normal;
+out vec3 texcoord;
 // 출력 매개변수 선언
 
 uniform mat4 M;

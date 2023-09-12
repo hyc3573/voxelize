@@ -8,10 +8,11 @@ use glium::{
     Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer},
 };
 use nalgebra_glm as glm;
+use itertools::iproduct;
 
 mod load_model;
 
-const GWIDTH: u16 = 256;
+const GWIDTH: u16 = 64;
 
 fn main() {
     use glium::glutin;
@@ -21,37 +22,52 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let model = load_model("models/shion.obj", &display);
+    let model = load_model("/home/yuchan/Projects/voxelize/src/models/spoon.obj", &display);
 
-    let frag = include_str!("shaders/voxelize.frag");
-    let vert = include_str!("shaders/voxelize.vert");
-    let geom = include_str!("shaders/voxelize.geom");
+    let frag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.frag");
+    let vert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.vert");
+    let geom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.geom");
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
 
     #[derive(Copy, Clone)]
-    struct Vertex {
+    struct P2 {
         pos: [f32; 2],
     }
-    implement_vertex!(Vertex, pos);
+    implement_vertex!(P2, pos);
 
     let fullscreen_rect = [
-        Vertex {pos: [-1., 1.]},
-        Vertex {pos: [1., 1.]},
-        Vertex {pos: [-1., -1.]},
-        Vertex {pos: [1., 1.]},
-        Vertex {pos: [1., -1.]},
-        Vertex {pos: [-1., -1.]},
+        P2 {pos: [-1., 1.]},
+        P2 {pos: [1., 1.]},
+        P2 {pos: [-1., -1.]},
+        P2 {pos: [1., 1.]},
+        P2 {pos: [1., -1.]},
+        P2 {pos: [-1., -1.]},
     ];
     let fullscreen_rect = glium::VertexBuffer::new(&display, &fullscreen_rect).unwrap();
     let fullscreen_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-    let gridvert = include_str!("shaders/voxelgrid.vert");
-    let gridfrag = include_str!("shaders/voxelgrid.frag");
-    
+    let gridvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelgrid.vert");
+    let gridfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelgrid.frag");
     let gridprog = glium::Program::from_source(&display, gridvert, gridfrag, None).unwrap();
 
-    let clearvert = include_str!("shaders/gridclear.vert");
-    let clearfrag = include_str!("shaders/gridclear.frag");
+    #[derive(Copy, Clone)]
+    struct P3 {
+        pos: [f32; 3]
+    }
+    implement_vertex!(P3, pos);
+
+    let mut grid = iproduct!((0..64), (0..64), (0..64)).map(
+        |(a, b, c)| P3 {pos: [a as f32, b as f32, c as f32]}
+    ).collect::<Vec<P3>>();
+    let grid = glium::VertexBuffer::new(&display, &grid).unwrap();
+    let grid_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+    let gvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.vert");
+    let ggeom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.geom");
+    let gfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.frag");
+    let gprog = glium::Program::from_source(&display, &gvert, &gfrag, Some(&ggeom)).unwrap();
+
+    let clearvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/gridclear.vert");
+    let clearfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/gridclear.frag");
     let clearprog = glium::Program::from_source(
         &display, clearvert, clearfrag, None
     ).unwrap();
@@ -77,12 +93,16 @@ fn main() {
     event_loop.run(move |ev, _, control_flow| {
         let m = glm::scale::<f32>(
             &glm::rotation(
-                t.elapsed().as_secs_f32()/2., &glm::vec3(0., 1., 0.)
-            ), &glm::vec3(0.1, 0.1, 0.1),
+                45., &glm::vec3(0., 1., 0.)
+            ), &glm::vec3(1., 1., 1.),
         );
-        let v = glm::translation::<f32>(&glm::vec3(0., -1., 1.));
-        let p = glm::ortho::<f32>(-1., 1., -1., 1., 0., -2.);
+        let v = glm::translation::<f32>(&glm::vec3(0., 0., 0.));
+        let p = glm::ortho::<f32>(-1., 1., -1., 1., 0., -3.);
         // let voxelgrid = glium::texture::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+
+        let matrix = glm::rotation::<f32>(
+            t.elapsed().as_secs_f32(), &glm::vec3(0., 1., 0.)
+        );
 
         for i in 0..i32::from(GWIDTH) {
             framebuffer.draw(
@@ -126,22 +146,37 @@ fn main() {
 
         target.clear_color(0.0, 0.0, 0.0, 1.0);
 
-        for i in 0..i32::from(GWIDTH) {
-            target.draw(
-                &fullscreen_rect,
-                fullscreen_ind,
-                &gridprog,
-                &uniform! {
-                    grid: glium::uniforms::Sampler::new(&voxelgrid)
+        // for i in 0..i32::from(GWIDTH) {
+        //     target.draw(
+        //         &fullscreen_rect,
+        //         fullscreen_ind,
+        //         &gridprog,
+        //         &uniform! {
+        //             grid: glium::uniforms::Sampler::new(&voxelgrid)
+        //                 .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest)
+        //                 .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
+        //                 .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
+        //             depth: i,
+        //             GWIDTH: GWIDTH,
+        //             matrix: *matrix.as_ref()
+        //         },
+        //         &Default::default()
+        //     ).unwrap();
+        // }
+        target.draw(
+            &grid,
+            grid_ind,
+            &gprog,
+            &uniform! {
+                matrix: *matrix.as_ref(),
+                GWIDTH: GWIDTH,
+                grid: glium::uniforms::Sampler::new(&voxelgrid)
                         .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest)
                         .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
-                        .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
-                    depth: i,
-                    GWIDTH: GWIDTH
-                },
-                &Default::default()
-            ).unwrap();
-        }
+                        .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp)
+            },
+            &Default::default()
+        );
 
         target.finish().unwrap();
 
