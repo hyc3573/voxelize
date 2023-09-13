@@ -6,6 +6,7 @@ in vec3[] texcoord;
 out vec3 tex;
 
 uniform uint GWIDTH;
+uniform mat4 matrix;
 
 void main() {
     vec3 ps[] = {
@@ -34,7 +35,7 @@ void main() {
         1, 0, 4
     };
 
-    float width = 2./float(GWIDTH);
+    float width = 2./float(GWIDTH) - 0.01/*bias*/;
 
     for (int i=0;i<36;i+=3)    
     {
@@ -42,7 +43,7 @@ void main() {
         {
             tex = texcoord[0];
             vec4 vert = vec4(ps[is[i]+j], 0.);
-            gl_Position = gl_in[0].gl_Position+vert*width;
+            gl_Position = gl_in[0].gl_Position+matrix*(vert*width);
             EmitVertex();
         }
     }

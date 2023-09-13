@@ -56,7 +56,7 @@ fn main() {
     }
     implement_vertex!(P3, pos);
 
-    let mut grid = iproduct!((0..64), (0..64), (0..64)).map(
+    let mut grid = iproduct!((0..GWIDTH), (0..GWIDTH), (0..GWIDTH)).map(
         |(a, b, c)| P3 {pos: [a as f32, b as f32, c as f32]}
     ).collect::<Vec<P3>>();
     let grid = glium::VertexBuffer::new(&display, &grid).unwrap();
@@ -100,9 +100,17 @@ fn main() {
         let p = glm::ortho::<f32>(-1., 1., -1., 1., 0., -3.);
         // let voxelgrid = glium::texture::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
 
-        let matrix = glm::rotation::<f32>(
-            t.elapsed().as_secs_f32(), &glm::vec3(0., 1., 0.)
+        let matrix = glm::translation::<f32>(
+            &glm::vec3(0., 0., -3.)
+        )*glm::rotation::<f32>(
+            t.elapsed().as_secs_f32(), &glm::vec3(0., 1., 0.),
         );
+        let matrix = glm::perspective::<f32>(
+            1.,
+            glm::pi::<f32>()/4.,
+            0.1,
+            100.
+        )*matrix;
 
         for i in 0..i32::from(GWIDTH) {
             framebuffer.draw(

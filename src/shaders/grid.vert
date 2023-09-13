@@ -10,5 +10,5 @@ void main()
 {
     vec3 n_pos = pos/float(GWIDTH/2) - vec3(1., 1., 1.);
     texcoord = pos/float(GWIDTH);
-    gl_Position = vec4(n_pos, 1.0);
+    gl_Position = matrix*vec4(n_pos, 1.0);
 }
