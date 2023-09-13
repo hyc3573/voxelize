@@ -25,25 +25,25 @@ void main() {
     vec4 G = (gl_in[0].gl_Position + gl_in[1].gl_Position + gl_in[2].gl_Position)/3.;
 
     // dominant axis: x
-    if (x < y && x < z)
+    if (x > y && x > z)
     {
         for (int i=0;i<3;i++)
         {
-            newpos[i] = gl_in[i].gl_Position.yxz;
+            newpos[i] = gl_in[i].gl_Position.yzx;
         }
     }
-    else if (y < x && y < z)
+    else if (y > x && y > z)
     {
         for (int i=0;i<3;i++)
         {
-            newpos[i] = gl_in[i].gl_Position.xyz;
+            newpos[i] = gl_in[i].gl_Position.xzy;
         }
     }
     else
     {
         for (int i=0;i<3;i++)
         {
-            newpos[i] = gl_in[i].gl_Position.xzy;
+            newpos[i] = gl_in[i].gl_Position.xyz;
         }
     }
     

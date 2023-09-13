@@ -60,7 +60,7 @@ fn main() {
         |(a, b, c)| P3 {pos: [a as f32, b as f32, c as f32]}
     ).collect::<Vec<P3>>();
     let grid = glium::VertexBuffer::new(&display, &grid).unwrap();
-    let grid_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+    let grid_ind = glium::index::NoIndices(glium::index::PrimitiveType::Points);
     let gvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.vert");
     let ggeom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.geom");
     let gfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.frag");

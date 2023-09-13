@@ -7,8 +7,7 @@ out vec3 tex;
 
 uniform uint GWIDTH;
 
-void main()
-{
+void main() {
     vec3 ps[] = {
         vec3(0., 0., 0.),
         vec3(1., 0., 0.),
@@ -37,14 +36,15 @@ void main()
 
     float width = 2./float(GWIDTH);
 
-    for (i=0;i<36;i+=3)    
+    for (int i=0;i<36;i+=3)    
+    {
         for (int j=0;j<3;j++)
         {
             tex = texcoord[0];
             vec4 vert = vec4(ps[is[i]+j], 0.);
-            gl_Position = vec4(gl_in[0]+vert*width);
+            gl_Position = gl_in[0].gl_Position+vert*width;
+            EmitVertex();
         }
-        EmitVertex();
     }
     EndPrimitive();
 }
