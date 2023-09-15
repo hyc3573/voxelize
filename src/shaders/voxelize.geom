@@ -5,10 +5,10 @@ layout (triangle_strip, max_vertices = 3) out;
 
 in vec3 position[];
 in vec3 normal[];
-in vec3 texcoord[];
+in vec2 texcoord[];
 out vec3 clippos;
-out vec3 tex;
 out vec3 nor;                
+out vec2 tex;                  
 
 void main() {
     // compute dominant axis

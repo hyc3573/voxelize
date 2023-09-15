@@ -5,7 +5,7 @@ use std::rc::Rc;
 use crate::load_model::load_model;
 use glium::{
     uniforms::{ImageUnitAccess, ImageUnitFormat},
-    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer},
+    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::event::{ModifiersState, ElementState},
 };
 use nalgebra_glm as glm;
 use itertools::iproduct;
@@ -71,6 +71,12 @@ fn main() {
     let clearprog = glium::Program::from_source(
         &display, clearvert, clearfrag, None
     ).unwrap();
+
+    let vxgi1vert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.vert");
+    let vxgi1frag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.frag");
+    let vxgi1prog = glium::Program::from_source(
+        &display, &vxgi1vert, &vxgi1frag, None
+    ).unwrap();
     
     let t = std::time::Instant::now();
 
@@ -81,7 +87,7 @@ fn main() {
     let imunit_behav = imunit_behav;
 
     let empty = vec![vec![vec![(0., 0., 0., 0.); GWIDTH.into()]; GWIDTH.into()]; GWIDTH.into()];
-    let voxelgrid = glium::texture::texture3d::Texture3d::with_format(&display, empty, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap).unwrap();
+    let voxelgrid = glium::texture::texture3d::Texture3d::with_format(&display, empty, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmaps).unwrap();
 
     let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
         &display,
@@ -90,15 +96,19 @@ fn main() {
         None, None, false
     ).unwrap();
 
+    let mut camera_pos = glm::vec3(0., 0., 0.);
+    let mut camera_dir = glm::vec3(0., 0., -1.);
+
     event_loop.run(move |ev, _, control_flow| {
         let m = glm::scale::<f32>(
             &glm::rotation(
                 45., &glm::vec3(0., 1., 0.)
             ), &glm::vec3(1., 1., 1.),
         );
-        let v = glm::translation::<f32>(&glm::vec3(0., 0., 0.));
-        let p = glm::ortho::<f32>(-1., 1., -1., 1., 0., -3.);
+        let v = glm::translation::<f32>(&glm::vec3(0., 0., -1.));
+        let voxelproj = glm::ortho::<f32>(-1., 1., -1., 1., 0., -3.);
         // let voxelgrid = glium::texture::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+        let normalmat = glm::inverse_transpose(m);
 
         let matrix = glm::translation::<f32>(
             &glm::vec3(0., 0., -3.)
@@ -107,7 +117,7 @@ fn main() {
         );
         let matrix = glm::perspective::<f32>(
             1.,
-            glm::pi::<f32>()/4.,
+            glm::pi::<f32>()/4.0,
             0.1,
             100.
         )*matrix;
@@ -138,7 +148,8 @@ fn main() {
                     &uniform! {
                         M: *m.as_ref(),
                         V: *v.as_ref(),
-                        P: *p.as_ref(),
+                        P: *voxelproj.as_ref(),
+                        NM: *normalmat.as_ref(),
                         grid: voxelgrid.image_unit(
                             glium::uniforms::ImageUnitFormat::RGBA32F
                         ).unwrap().set_access(
@@ -148,6 +159,10 @@ fn main() {
                     },
                     &Default::default(),
                 ).unwrap();
+        }
+
+        unsafe {
+            voxelgrid.generate_mipmaps();
         }
 
         let mut target = display.draw();
@@ -171,7 +186,7 @@ fn main() {
         //         &Default::default()
         //     ).unwrap();
         // }
-        target.draw(
+        /* target.draw(
             &grid,
             grid_ind,
             &gprog,
@@ -184,7 +199,34 @@ fn main() {
                         .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp)
             },
             &Default::default()
-        );
+        ); */
+
+        let view = glm::look_at::<f32>(
+            &camera_pos, &(camera_pos+camera_dir), &glm::vec3(0., 1., 0.)
+        )*glm::translation::<f32>(
+            &glm::vec3(0., 0., -2.0)
+        )*v;
+        let pers = glm::perspective(1., glm::pi::<f32>()/4., 0.01, 10.);
+        for i in 0..model.len() {
+            target.draw(
+                &model[i].0,
+                &model[i].1,
+                &vxgi1prog,
+                &uniform! {
+                    M: *m.as_ref(),
+                    V: *view.as_ref(),
+                    P: *pers.as_ref(),
+                    VP: *voxelproj.as_ref(),
+                    NM: *normalmat.as_ref(),
+                    grid: glium::uniforms::Sampler::new(&voxelgrid)
+                        .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest)
+                        .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
+                        .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
+                    GWIDTH: GWIDTH
+                },
+                &Default::default()
+            ).unwrap();
+        }
 
         target.finish().unwrap();
 
@@ -195,10 +237,64 @@ fn main() {
             glutin::event::Event::WindowEvent { event, .. } => match event {
                 glutin::event::WindowEvent::CloseRequested => {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
-                    return;
-                }
+                },
                 _ => return,
             },
+            glutin::event::Event::DeviceEvent { event, .. } => match event {
+                glutin::event::DeviceEvent::Key (key) => match key {
+                    glutin::event::KeyboardInput {virtual_keycode, state: ElementState::Pressed, ..} => match virtual_keycode {
+                        Some(glutin::event::VirtualKeyCode::W) => {
+                            camera_pos.z += -0.1;
+                        }
+                        Some(glutin::event::VirtualKeyCode::S) => {
+                            camera_pos.z += 0.1;
+                        }
+                        Some(glutin::event::VirtualKeyCode::A) => {
+                            camera_pos.x += -0.1;
+                        }
+                        Some(glutin::event::VirtualKeyCode::D) => {
+                            camera_pos.x += 0.1;
+                        }
+                        Some(glutin::event::VirtualKeyCode::Space) => {
+                            camera_pos.y += 0.1;
+                        }
+                        Some(glutin::event::VirtualKeyCode::LShift) => {
+                            camera_pos.y += -0.1;
+                        }
+                        Some(glutin::event::VirtualKeyCode::Up) => {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                glm::pi::<f32>()/360.,
+                                &glm::vec3(1., 0., 0.)
+                            )
+                        }
+                        Some(glutin::event::VirtualKeyCode::Down) => {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                -glm::pi::<f32>()/360.,
+                                &glm::vec3(1., 0., 0.)
+                            )
+                        }
+                        Some(glutin::event::VirtualKeyCode::Left) => {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                glm::pi::<f32>()/360.,
+                                &glm::vec3(0., 1., 0.)
+                            )
+                        }
+                        Some(glutin::event::VirtualKeyCode::Right) => {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                -glm::pi::<f32>()/360.,
+                                &glm::vec3(0., 1., 0.)
+                            )
+                        }
+                        _ => ()
+                    }
+                    _ => ()
+                }
+                _ => (),
+            }
             _ => (),
         }
     });

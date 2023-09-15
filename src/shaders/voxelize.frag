@@ -1,6 +1,8 @@
 #version 450 core
 
 in vec3 clippos; // Geometry Shader에서 전달받은 위치 벡터
+in vec3 nor;
+in vec2 tex;
 
 uniform layout (rgba32f) writeonly image3D grid; // 3D 텍스쳐
 uniform uint GWIDTH; // 텍스쳐 너비
