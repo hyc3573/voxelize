@@ -31,7 +31,7 @@ void main() {
     vec3 pos;
     // vec3 voxbias = voxcoord + normal*dist;
     float radius;
-    while (opacity < 1.)
+    while (true)
     {
         pos = voxcoord + dist*dir;
 

@@ -11,7 +11,6 @@ use nalgebra_glm as glm;
 use itertools::iproduct;
 
 mod load_model;
-mod draw;
 
 const GWIDTH: u16 = 128;
 
