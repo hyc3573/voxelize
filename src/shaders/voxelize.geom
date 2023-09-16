@@ -15,8 +15,7 @@ void main() {
     vec4 A = gl_in[0].gl_Position - gl_in[1].gl_Position;
     vec4 B = gl_in[1].gl_Position - gl_in[2].gl_Position;
 
-    vec3 N = normalize(cross(A.xyz, B.xyz));
-    float x=abs(N.x), y=abs(N.y), z=abs(N.z);
+    vec3 N = abs(cross(A.xyz, B.xyz));
 
     vec3 newpos[3] = {
         vec3(0.), vec3(0.), vec3(0.)
@@ -24,31 +23,23 @@ void main() {
 
     vec4 G = (gl_in[0].gl_Position + gl_in[1].gl_Position + gl_in[2].gl_Position)/3.;
 
-    // dominant axis: x
-    if (x > y && x > z)
-    {
-        for (int i=0;i<3;i++)
-        {
-            newpos[i] = gl_in[i].gl_Position.yzx;
-        }
-    }
-    else if (y > x && y > z)
-    {
-        for (int i=0;i<3;i++)
-        {
-            newpos[i] = gl_in[i].gl_Position.xzy;
-        }
-    }
-    else
-    {
-        for (int i=0;i<3;i++)
-        {
-            newpos[i] = gl_in[i].gl_Position.xyz;
-        }
-    }
-    
     for (int i=0;i<3;i++)
     {
+        vec3 P = gl_in[i].gl_Position.xyz;
+        if (N.z > N.x && N.z > N.y)
+        {
+            newpos[i] = vec3(P.x, P.y, 0.f);
+            
+        }
+        else if (N.x > N.z && N.x > N.y)
+        {
+            newpos[i] = vec3(P.y, P.z, 0.f);
+        }
+        else
+        {
+            newpos[i] = vec3(P.x, P.z, 0.f);
+        }
+    
         gl_Position = vec4(newpos[i], 1.0);
         clippos = position[i];
         tex = texcoord[i];

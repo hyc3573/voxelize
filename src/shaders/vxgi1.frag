@@ -1,9 +1,11 @@
 #version 450 core
+#pragma optionNV (unroll all)
 
-#define LPOS vec3(0., 10., 0.)
+#define LPOS vec3(0., 0., -1.)
 #define PI 3.1415926538
-#define APT PI/10 
+#define APT PI/4.
 #define BIAS 0.01
+#define TQT 2.8284271247
 
 in vec3 normal;
 in vec2 texcoord;
@@ -13,26 +15,42 @@ uniform uint GWIDTH;
 
 out vec4 color;
 
-float radius(float miplvl) {
-    return 1./GWIDTH*pow(2, miplvl);
+float gwidth = float(GWIDTH);
+
+float radius2miplvl(float radius) {
+    return log2(radius*gwidth*2.0);
 }
 
-void main() {
+void main() { 
     float opacity = 0.;
     vec3 dir = normalize(LPOS - voxcoord);
-    vec3 pos = voxcoord + dir*BIAS;
-    float steplen = tan(APT)/64.;
-    float miplvl = 0;
 
-    int step = 0;
-    while (length(pos - LPOS) > radius(miplvl) || opacity >= 1. || step > 2)
+    float dist = 1.0/gwidth;
+    // float dist = 0.001;
+    
+    vec3 pos;
+    // vec3 voxbias = voxcoord + normal*dist;
+    float radius;
+    while (opacity < 1.)
     {
-        opacity += textureLod(grid, pos, miplvl).a;
-        float rad = radius(miplvl);
-        pos += rad;
-        miplvl += log2(rad*(1+tan(APT)));
-        step++;
+        pos = voxcoord + dist*dir;
+
+        vec3 clamped = clamp(pos, 0.,1.);
+        if (dot(pos - LPOS, pos - LPOS) < radius*radius)
+            break;
+
+        if (clamped != pos)
+            break;
+
+        radius = dist*tan(APT/2.);
+        float newopacity = textureLod(grid, pos, radius2miplvl(radius)).a;
+        opacity +=(1.-opacity)* newopacity;
+        opacity = min(1., opacity);
+        dist += radius*2;
     }
 
-    color = vec4(vec3(1.0, 1.0, 1.0)*(1.-opacity), 1.0);
+        opacity = step(0.1, opacity);
+
+    color = vec4(vec3(1.0, 1.0, 1.0)*(1.0-opacity/1.), 1.0);
+
 }
