@@ -12,7 +12,7 @@ use itertools::iproduct;
 
 mod load_model;
 
-const GWIDTH: u16 = 128;
+const GWIDTH: u16 = 64;
 
 fn main() {
     use glium::glutin;
