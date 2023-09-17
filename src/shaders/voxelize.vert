@@ -10,7 +10,7 @@ out vec3 normal;
 out vec2 texcoord;
 // 출력 매개변수 선언
 
-uniform mat3 NM;
+uniform mat4 VNM;
 uniform mat4 M;
 uniform mat4 V;
 uniform mat4 P;
@@ -22,6 +22,6 @@ void main()
     gl_Position = P*V*M*vec4(pos, 1.0); // 위치 벡터 변환
     position = gl_Position.xyz; // 변환된 위치 벡터를 Geometry Shader로 전송
 
-    normal = NM*nor;
+    normal = normalize(mat3(VNM)*nor);
     texcoord = tex;
 }
