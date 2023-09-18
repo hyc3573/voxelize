@@ -9,10 +9,11 @@ use glium::{
 };
 use nalgebra_glm as glm;
 use itertools::iproduct;
+use image;
 
 mod load_model;
 
-const GWIDTH: u16 = 64;
+const GWIDTH: u16 = 128;
 
 fn main() {
     use glium::glutin;
@@ -22,7 +23,14 @@ fn main() {
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-    let (model, m) = load_model("/home/yuchan/Projects/voxelize/src/models/shion.obj", &display);
+    let (model, m) = load_model("/home/yuchan/Projects/voxelize/src/models/sponza.obj", &display);
+
+    let image = image::load(std::io::Cursor::new(&include_bytes!("/home/yuchan/Projects/voxelize/src/textures/text1.jpg")),
+                            image::ImageFormat::Jpeg
+    ).unwrap().to_rgba8();
+    let image_dim = image.dimensions();
+    let image = glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dim);
+    let texture = glium::texture::Texture2d::new(&display, image).unwrap();
 
     let frag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.frag");
     let vert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.vert");
@@ -97,9 +105,10 @@ fn main() {
         None, None, false
     ).unwrap();
 
-    let mut camera_pos = glm::vec3(0., 0., 3.);
+    let mut camera_pos = glm::vec3(0., 0., 0.);
     let mut camera_dir = glm::vec3(0., 0., -1.);
     let camera_up = glm::vec3(0., 1., 0.);
+    let mut lpos = glm::vec3::<f32>(0., 0., 0.);
 
     let mut model_rot = 0.0;
 
@@ -116,8 +125,14 @@ fn main() {
     let mut key_down = false;
     let mut key_left = false;
     let mut key_right = false;
+    let mut key_i = false;
+    let mut key_j = false;
+    let mut key_k = false;
+    let mut key_l = false;
+    let mut key_n = false;
+    let mut key_m = false;
 
-    let mut enabled = true;
+    let mut enabled = false;
 
     event_loop.run(move |ev, _, control_flow| {
         
@@ -186,7 +201,9 @@ fn main() {
                                     glium::uniforms::ImageUnitAccess::Write
                                 ),
                                 GWIDTH: GWIDTH,
-                                cameraworldpos: *camera_pos.as_ref()
+                                cameraworldpos: *camera_pos.as_ref(),
+                                image: &texture,
+                                lpos: *lpos.as_ref()
                             },
                             &Default::default(),
                         ).unwrap();
@@ -258,7 +275,9 @@ fn main() {
                                 .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *camera_pos.as_ref(),
-                                enabled: enabled
+                                enabled: enabled,
+                                tex: &texture,
+                                lpos: *lpos.as_ref()
                             },
                             &glium::DrawParameters {
                                 depth: glium::Depth {
@@ -295,7 +314,9 @@ fn main() {
                                 .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *(camera_pos).as_ref(),
-                                enabled: enabled
+                                enabled: enabled,
+                                tex: &texture,
+                                lpos: *lpos.as_ref()
                             },
                             &glium::DrawParameters {
                                 depth: glium::Depth {
@@ -311,7 +332,7 @@ fn main() {
 
                 target.finish().unwrap();               
 
-                let speed = 4.;
+                let speed = 0.5;
                 let angspeed = glm::pi::<f32>()/2.;
                 if key_w {
                     camera_pos += camera_dir*speed*dt;
@@ -359,6 +380,24 @@ fn main() {
                         &camera_up
                     )
                 }
+                if key_i {
+                    lpos.y += speed*dt;
+                }
+                if key_j {
+                    lpos.x += speed*dt;
+                }
+                if key_k {
+                    lpos.y -= speed*dt;
+                }
+                if key_l {
+                    lpos.x -= speed*dt;
+                }
+                if key_n {
+                    lpos.z += speed*dt;
+                }
+                if key_m {
+                    lpos.z -= speed*dt;
+                }
 
             }
             glutin::event::Event::WindowEvent { event, .. } => match event {
@@ -398,6 +437,24 @@ fn main() {
                             }
                             Some(glutin::event::VirtualKeyCode::Right) => {
                                 key_right = pressed;
+                            }
+                            Some(glutin::event::VirtualKeyCode::I) => {
+                                key_i = pressed;
+                            }
+                            Some(glutin::event::VirtualKeyCode::J) => {
+                                key_j = pressed;
+                            }
+                            Some(glutin::event::VirtualKeyCode::K) => {
+                                key_k = pressed;
+                            }
+                            Some(glutin::event::VirtualKeyCode::L) => {
+                                key_l = pressed;
+                            }
+                            Some(glutin::event::VirtualKeyCode::N) => {
+                                key_n = pressed;
+                            }
+                            Some(glutin::event::VirtualKeyCode::M) => {
+                                key_m = pressed;
                             }
                             Some(glutin::event::VirtualKeyCode::T) => {
                                 if pressed {

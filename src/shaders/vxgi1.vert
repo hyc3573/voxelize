@@ -1,7 +1,5 @@
 #version 450 core
 
-#define LPOS vec3(0., 0., 1.)
-
 in vec3 pos;
 in vec3 nor;
 in vec2 tex;
@@ -21,6 +19,9 @@ uniform mat4 V;
 uniform mat4 P;
 uniform mat4 VP;
 uniform mat4 VV;
+uniform vec3 lpos;
+
+vec3 LPOS = vec3(lpos.xy, lpos.z);
 
 void main()
 {

@@ -5,6 +5,11 @@
 #define APT PI/8.
 #define BIAS 0.01
 
+#define kd 1.0
+#define ks 0.3
+#define kid 1.0
+#define kis 0.3
+
 in vec3 _worldnormal;
 in vec3 _viewnormal;
 in vec2 texcoord;
@@ -16,6 +21,7 @@ uniform sampler3D grid;
 uniform uint GWIDTH;
 uniform vec3 cameraworldpos;
 uniform bool enabled;
+uniform sampler2D tex;
 
 out vec4 fragcolor;
 
@@ -32,7 +38,7 @@ float occlusiontrace() {
     vec3 pos;
     float radius;
     float opacity = 0.;
-    float dist = 1.0/gwidth;
+    float dist = 1.5/gwidth;
 
     while (true) {
         pos = worldpos + dist*ldir;
@@ -83,18 +89,50 @@ vec4 trace(float apt, vec3 dir) {
 }
 
 void main() { 
-    float directdiffuse = max(dot(ldir, worldnormal), 0.0)*0.5;
+    vec4 diffusecolor = texture(tex, texcoord);
+    
+    float directdiffuse = max(dot(ldir, worldnormal), 0.0)*kd;
 
     vec3 viewdir = normalize(cameraworldpos - worldpos);
     vec3 reflectdir = reflect(-ldir, worldnormal);
-    float directspec = pow(max(dot(viewdir, reflectdir), 0.0), 5)*0.5;
+    float directspec = pow(max(dot(viewdir, reflectdir), 0.0), 32)*ks;
+
     
     if (enabled) {
         float occlusion = occlusiontrace();
         
-        fragcolor = vec4(vec3(1., 1., 1.)*(directdiffuse+directspec)*(1.-occlusion), 1.0);
+        vec3 N = worldnormal;
+        vec3 T = cross(N, vec3(0.0f, 1.0f, 0.0f));
+        vec3 B = cross(T, N);
+
+        vec3 inddiff = vec3(0., 0., 0.);
+
+        vec3 dir = worldnormal;
+        inddiff += trace(PI/3., dir).rgb;
+        dir = 0.7071f * N + 0.7071f * T;
+        inddiff += trace(PI/3., dir).rgb;
+        dir = 0.7071f * N + 0.7071f * (0.309f * T + 0.951f * B);
+        inddiff += trace(PI/3., dir).rgb;
+        dir = 0.7071f * N + 0.7071f * (-0.809f * T + 0.588f * B);
+        inddiff += trace(PI/3., dir).rgb;
+        dir = 0.7071f * N - 0.7071f * (-0.809f * T - 0.588f * B);
+        inddiff += trace(PI/3., dir).rgb;
+        dir = 0.7071f * N - 0.7071f * (0.309f * T - 0.951f * B);
+        inddiff += trace(PI/3., dir).rgb;
+
+        vec3 clr = diffusecolor.rgb*(directdiffuse+directspec)*(1.-occlusion);
+        clr += inddiff/6.*kid;
+
+        vec3 refldir = -reflect(viewdir, worldnormal);
+        vec3 spec = vec3(0., 0., 0.);
+        spec += trace(PI/6., refldir).rgb;
+        clr += spec*kis;
+        
+        clr /= (kd + ks + kid + kis);
+        
+        fragcolor = vec4(clr, diffusecolor.a);
     } else {
-        fragcolor = vec4(vec3(1., 1., 1.)*(directdiffuse+directspec), 1.0);
+        fragcolor = vec4(diffusecolor.rgb*(directdiffuse+directspec), diffusecolor.a);
     }
     // fragcolor = vec4(viewnormal, 1.0);
 }
