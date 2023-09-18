@@ -62,7 +62,8 @@ pub fn load_model(
 
     println!("{} {}", mincoord, maxcoord);
 
-    let size = (maxcoord - mincoord).abs();
+    let size = (maxcoord - mincoord)/2.;
+    let sizesc = size.max();
     let sizevec = glm::vec3(1./size.max(), 1./size.max(), 1./size.max());
     let position = (mincoord + maxcoord)/2.;
 

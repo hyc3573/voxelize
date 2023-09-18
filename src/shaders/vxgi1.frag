@@ -5,11 +5,6 @@
 #define APT PI/8.
 #define BIAS 0.01
 
-#define kd 1.0
-#define ks 0.3
-#define kid 1.0
-#define kis 0.3
-
 in vec3 _worldnormal;
 in vec3 _viewnormal;
 in vec2 texcoord;
@@ -22,6 +17,11 @@ uniform uint GWIDTH;
 uniform vec3 cameraworldpos;
 uniform bool enabled;
 uniform sampler2D tex;
+
+uniform float kd;
+uniform float ks;
+uniform float kid;
+uniform float kis;
 
 out vec4 fragcolor;
 
@@ -40,23 +40,25 @@ float occlusiontrace() {
     float opacity = 0.;
     float dist = 1.5/gwidth;
 
-    while (true) {
+    while (opacity < 1.0) {
         pos = worldpos + dist*ldir;
 
         vec3 clamped = clamp(pos, 0.,1.);
-        if (dot(pos - lworldpos, pos - lworldpos) < radius*radius)
+        if (dot(pos - lworldpos, pos - lworldpos) < radius*radius) {
+            opacity /= 2.0;
             break;
-
-        if (clamped != pos)
+        }
+        if (clamped != pos) {
+            // this means that lpos is outside of NDC boundary
             break;
-
+        }
         radius = dist*tan(APT/2.);
         vec4 rgba = textureLod(grid, pos, radius2miplvl(radius));
         float newopacity = rgba.a; 
         opacity +=(1.-opacity)* newopacity;
-        opacity = min(1., opacity);
         dist += radius*2;
     }
+    opacity = min(1., opacity);
 
     return opacity;
 }

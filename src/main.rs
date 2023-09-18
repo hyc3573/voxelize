@@ -8,8 +8,10 @@ use glium::{
     Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::event::{ModifiersState, ElementState},
 };
 use nalgebra_glm as glm;
-use itertools::iproduct;
+use itertools::{iproduct, Itertools};
 use image;
+use egui;
+use egui_glium;
 
 mod load_model;
 
@@ -22,6 +24,7 @@ fn main() {
     let wb = glutin::window::WindowBuilder::new();
     let cb = glutin::ContextBuilder::new();
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
+    let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
     let (model, m) = load_model("/home/yuchan/Projects/voxelize/src/models/sponza.obj", &display);
 
@@ -110,6 +113,11 @@ fn main() {
     let camera_up = glm::vec3(0., 1., 0.);
     let mut lpos = glm::vec3::<f32>(0., 0., 0.);
 
+    let mut kd: f32 = 1.0;
+    let mut kid: f32 = 1.0;
+    let mut ks: f32 = 0.3;
+    let mut kis: f32 = 0.3;
+
     let mut model_rot = 0.0;
 
     let mut draw_grid = false;
@@ -144,6 +152,22 @@ fn main() {
             glutin::event::Event::MainEventsCleared => {
                 let dt = dtclock.elapsed().as_secs_f32();
                 dtclock = std::time::Instant::now();
+                
+                let repaint_after = egui_glium.run(&display, |egui_ctx| {
+                    egui::SidePanel::left("adf").show(egui_ctx, |ui| {
+                        ui.heading("asdf");
+                        ui.label(format!("Light pos:"));
+                        ui.label(format!("x: {x}, y: {y}, z: {z}",
+                                         x = lpos.x,
+                                         y = lpos.y,
+                                         z = lpos.z)
+                        );
+                        ui.add(egui::Slider::new(&mut kd, 0.0..=2.0).text("kd"));
+                        ui.add(egui::Slider::new(&mut ks, 0.0..=2.0).text("ks"));
+                        ui.add(egui::Slider::new(&mut kid, 0.0..=2.0).text("kid"));
+                        ui.add(egui::Slider::new(&mut kis, 0.0..=2.0).text("kis"));
+                    });
+                });
                 
                 let voxelview = glm::Mat4::identity(); 
                 let voxelproj = glm::Mat4::identity(); 
@@ -277,7 +301,11 @@ fn main() {
                                 cameraworldpos: *camera_pos.as_ref(),
                                 enabled: enabled,
                                 tex: &texture,
-                                lpos: *lpos.as_ref()
+                                lpos: *lpos.as_ref(),
+                                kd: kd,
+                                kid: kid,
+                                ks: ks,
+                                kis: kis
                             },
                             &glium::DrawParameters {
                                 depth: glium::Depth {
@@ -316,7 +344,11 @@ fn main() {
                                 cameraworldpos: *(camera_pos).as_ref(),
                                 enabled: enabled,
                                 tex: &texture,
-                                lpos: *lpos.as_ref()
+                                lpos: *lpos.as_ref(),
+                                kd: kd,
+                                kid: kid,
+                                ks: ks,
+                                kis: kis
                             },
                             &glium::DrawParameters {
                                 depth: glium::Depth {
@@ -329,6 +361,8 @@ fn main() {
                         ).unwrap();
                     }
                 }
+
+                egui_glium.paint(&display, &mut target);
 
                 target.finish().unwrap();               
 
@@ -480,6 +514,9 @@ fn main() {
                             _ => ()
                         }
                     }
+                }
+                event => {
+                    egui_glium.on_event(&event);
                 }
                 _ => return,
             },
