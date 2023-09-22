@@ -11,6 +11,7 @@ use nalgebra_glm as glm;
 use itertools::{iproduct, Itertools};
 use image;
 use egui;
+use std::path::Path;
 use egui_glium;
 
 mod load_model;
@@ -26,7 +27,7 @@ fn main() {
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
-    let (model, m) = load_model("/home/yuchan/Projects/voxelize/src/models/sponza.obj", &display);
+    let (models, m) = load_model(Path::new("/home/yuchan/Projects/voxelize/src/models/cornell_box.obj"), &display);
 
     let image = image::load(std::io::Cursor::new(&include_bytes!("/home/yuchan/Projects/voxelize/src/textures/text1.jpg")),
                             image::ImageFormat::Jpeg
@@ -141,6 +142,7 @@ fn main() {
     let mut key_m = false;
 
     let mut enabled = false;
+    let mut only_occ = false;
 
     event_loop.run(move |ev, _, control_flow| {
         
@@ -166,6 +168,7 @@ fn main() {
                         ui.add(egui::Slider::new(&mut ks, 0.0..=2.0).text("ks"));
                         ui.add(egui::Slider::new(&mut kid, 0.0..=2.0).text("kid"));
                         ui.add(egui::Slider::new(&mut kis, 0.0..=2.0).text("kis"));
+                        ui.toggle_value(&mut only_occ, "Only occlusion");
                     });
                 });
                 
@@ -208,11 +211,11 @@ fn main() {
 
                 // voxelize
                 let normalmat = glm::inverse_transpose(voxelview*m);
-                for i in 0..model.len() {
+                for model in &models {
                     framebuffer
                         .draw(
-                            &model[i].0,
-                            &model[i].1,
+                            &model.vbo,
+                            &model.ibo,
                             &program,
                             &uniform! {
                                 M: *m.as_ref(),
@@ -226,7 +229,7 @@ fn main() {
                                 ),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *camera_pos.as_ref(),
-                                image: &texture,
+                                image: glium::uniforms::Sampler::new(&model.kd),
                                 lpos: *lpos.as_ref()
                             },
                             &Default::default(),
@@ -280,10 +283,10 @@ fn main() {
                 if !draw_grid && !draw_voxelization_camera {
                     let vnormalmat = glm::inverse_transpose(voxelview*m);
                     let rnormalmat = glm::inverse_transpose(view*m);
-                    for i in 0..model.len() {
+                    for model in &models {
                         target.draw(
-                            &model[i].0,
-                            &model[i].1,
+                            &model.vbo,
+                            &model.ibo,
                             &vxgi1prog,
                             &uniform! {
                                 M: *m.as_ref(),
@@ -302,10 +305,9 @@ fn main() {
                                 enabled: enabled,
                                 tex: &texture,
                                 lpos: *lpos.as_ref(),
-                                kd: kd,
-                                kid: kid,
-                                ks: ks,
-                                kis: kis
+                                kd: glium::uniforms::Sampler::new(&model.kd),
+                                ks: glium::uniforms::Sampler::new(&model.ks),
+                                only_occ: only_occ
                             },
                             &glium::DrawParameters {
                                 depth: glium::Depth {
@@ -323,10 +325,10 @@ fn main() {
                 if !draw_grid && draw_voxelization_camera {
                     let vnormalmat = glm::inverse_transpose(voxelview*m);
                     let rnormalmat = glm::inverse_transpose(voxelview*model_rot_mat*m);
-                    for i in 0..model.len() {
+                    for model in &models {
                         target.draw(
-                            &model[i].0,
-                            &model[i].1,
+                            &model.vbo,
+                            &model.ibo,
                             &vxgi1prog,
                             &uniform! {
                                 M: *m.as_ref(),
@@ -345,10 +347,9 @@ fn main() {
                                 enabled: enabled,
                                 tex: &texture,
                                 lpos: *lpos.as_ref(),
-                                kd: kd,
-                                kid: kid,
-                                ks: ks,
-                                kis: kis
+                                kd: glium::uniforms::Sampler::new(&model.kd),
+                                ks: glium::uniforms::Sampler::new(&model.ks),
+                                only_occ: only_occ
                             },
                             &glium::DrawParameters {
                                 depth: glium::Depth {
@@ -525,6 +526,6 @@ fn main() {
 
         
 
-        println!("{} {}", draw_grid, draw_voxelization_camera);
+        // println!("{} {}", draw_grid, draw_voxelization_camera);
     });
 }

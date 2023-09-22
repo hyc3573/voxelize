@@ -16,12 +16,11 @@ uniform sampler3D grid;
 uniform uint GWIDTH;
 uniform vec3 cameraworldpos;
 uniform bool enabled;
+uniform bool only_occ;
 uniform sampler2D tex;
 
-uniform float kd;
-uniform float ks;
-uniform float kid;
-uniform float kis;
+uniform sampler2D kd;
+uniform sampler2D ks;
 
 out vec4 fragcolor;
 
@@ -39,6 +38,7 @@ float occlusiontrace() {
     float radius;
     float opacity = 0.;
     float dist = 1.5/gwidth;
+    radius = dist*tan(APT/2.);
 
     while (opacity < 1.0) {
         pos = worldpos + dist*ldir;
@@ -55,7 +55,7 @@ float occlusiontrace() {
         radius = dist*tan(APT/2.);
         vec4 rgba = textureLod(grid, pos, radius2miplvl(radius));
         float newopacity = rgba.a; 
-        opacity +=(1.-opacity)* newopacity;
+        opacity +=(1.-opacity)* newopacity/dist;
         dist += radius*2;
     }
     opacity = min(1., opacity);
@@ -91,16 +91,18 @@ vec4 trace(float apt, vec3 dir) {
 }
 
 void main() { 
-    vec4 diffusecolor = texture(tex, texcoord);
+    vec4 diffusecolor = texture(kd, texcoord);
+    vec4 speccolor = texture(ks, texcoord);
     
-    float directdiffuse = max(dot(ldir, worldnormal), 0.0)*kd;
+    float directdiffuse = max(dot(ldir, worldnormal), 0.0);
 
     vec3 viewdir = normalize(cameraworldpos - worldpos);
     vec3 reflectdir = reflect(-ldir, worldnormal);
-    float directspec = pow(max(dot(viewdir, reflectdir), 0.0), 32)*ks;
+    float directspec = pow(max(dot(viewdir, reflectdir), 0.0), 32);
 
+    vec3 direct = diffusecolor.rgb*directdiffuse+speccolor.rgb*directspec;
     
-    if (enabled) {
+    if (enabled && !only_occ) {
         float occlusion = occlusiontrace();
         
         vec3 N = worldnormal;
@@ -122,19 +124,22 @@ void main() {
         dir = 0.7071f * N - 0.7071f * (0.309f * T - 0.951f * B);
         inddiff += trace(PI/3., dir).rgb;
 
-        vec3 clr = diffusecolor.rgb*(directdiffuse+directspec)*(1.-occlusion);
-        clr += inddiff/6.*kid;
+        vec3 clr = direct*(1.-occlusion);
+        clr += inddiff/6.;
 
         vec3 refldir = -reflect(viewdir, worldnormal);
         vec3 spec = vec3(0., 0., 0.);
         spec += trace(PI/6., refldir).rgb;
-        clr += spec*kis;
+        clr += spec;
         
-        clr /= (kd + ks + kid + kis);
+        clr /= 4;
         
         fragcolor = vec4(clr, diffusecolor.a);
+    } else if (!enabled) {
+        fragcolor = vec4(direct, diffusecolor.a);
     } else {
-        fragcolor = vec4(diffusecolor.rgb*(directdiffuse+directspec), diffusecolor.a);
+        float occlusion = occlusiontrace();
+        fragcolor = vec4(direct, diffusecolor.a);
     }
     // fragcolor = vec4(viewnormal, 1.0);
 }
