@@ -139,7 +139,7 @@ void main() {
             clr += direct;
 
         if (enable_inddiff)
-            clr += inddiff*diffusecolor.rgb*5.;
+            clr += inddiff*diffusecolor.rgb;
 
         vec3 refldir = -reflect(viewdir, worldnormal);
         vec3 spec = vec3(0., 0., 0.);
