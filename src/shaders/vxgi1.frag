@@ -2,7 +2,7 @@
 #pragma optionNV (unroll all)
 
 #define PI 3.1415926538
-#define APT PI/8.
+#define APT PI/16.
 #define BIAS 0.01
 
 in vec3 _worldnormal;
@@ -18,6 +18,8 @@ uniform vec3 cameraworldpos;
 uniform bool enabled;
 uniform bool only_occ;
 uniform sampler2D tex;
+uniform bool write_vox;
+uniform layout (rgba32f) writeonly image3D wgrid;
 
 uniform sampler2D kd;
 uniform sampler2D ks;
@@ -28,6 +30,7 @@ float gwidth = float(GWIDTH);
 vec3 ldir = normalize(lworldpos - worldpos);
 vec3 worldnormal = normalize(_worldnormal);
 vec3 viewnormal = normalize(_viewnormal);
+float bias = 1.5/gwidth;
 
 float radius2miplvl(float radius) {
     return log2(radius*gwidth*2.0);
@@ -37,7 +40,7 @@ float occlusiontrace() {
     vec3 pos;
     float radius;
     float opacity = 0.;
-    float dist = 1.5/gwidth;
+    float dist = bias;
     radius = dist*tan(APT/2.);
 
     while (opacity < 1.0) {
@@ -101,10 +104,14 @@ void main() {
     float directspec = pow(max(dot(viewdir, reflectdir), 0.0), 32);
 
     vec3 direct = diffusecolor.rgb*directdiffuse+speccolor.rgb*directspec;
+
+    if (enabled)
+    {
+        float occlusion = occlusiontrace();
+        direct *= (1-occlusion);
+    }
     
     if (enabled && !only_occ) {
-        float occlusion = occlusiontrace();
-        
         vec3 N = worldnormal;
         vec3 T = cross(N, vec3(0.0f, 1.0f, 0.0f));
         vec3 B = cross(T, N);
@@ -124,7 +131,7 @@ void main() {
         dir = 0.7071f * N - 0.7071f * (0.309f * T - 0.951f * B);
         inddiff += trace(PI/3., dir).rgb;
 
-        vec3 clr = direct*(1.-occlusion);
+        vec3 clr = direct;
         clr += inddiff/6.;
 
         vec3 refldir = -reflect(viewdir, worldnormal);
@@ -138,8 +145,17 @@ void main() {
     } else if (!enabled) {
         fragcolor = vec4(direct, diffusecolor.a);
     } else {
-        float occlusion = occlusiontrace();
         fragcolor = vec4(direct, diffusecolor.a);
     }
     // fragcolor = vec4(viewnormal, 1.0);
+
+    if (write_vox) {
+        imageStore(
+            wgrid,
+            ivec3(
+                (worldpos+vec3(1.,1.,1.)*gwidth/2.)
+            ),
+            vec4(fragcolor.rgb, 1.0)
+        );
+    }
 }
