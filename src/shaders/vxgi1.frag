@@ -18,7 +18,6 @@ uniform bool only_occ;
 uniform bool enable_indspec;
 uniform bool enable_inddiff;
 uniform bool enable_dir;
-uniform sampler2D tex;
 uniform bool write_vox;
 uniform layout (rgba32f) writeonly image3D wgrid;
 
@@ -143,7 +142,7 @@ void main() {
 
         vec3 refldir = -reflect(viewdir, worldnormal);
         vec3 spec = vec3(0., 0., 0.);
-        spec += (trace(PI/16., refldir).rgb)*1.0;
+        spec += (trace(PI/64., refldir).rgb)*1.0;
         if (enable_indspec)
             clr += spec*diffusecolor.rgb;
         

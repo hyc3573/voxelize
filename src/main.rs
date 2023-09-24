@@ -13,13 +13,24 @@ use image;
 use egui;
 use std::path::Path;
 use egui_glium;
+use const_format::concatcp;
+use load_file::load_file_str;
 
 mod load_model;
 
 #[cfg(debug_assertions)]
 const GWIDTH: u16 = 64;
+#[cfg(debug_assertions)]
+const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
+#[cfg(debug_assertions)]
+const SRC_DIR: &str = concatcp!(env!("CARGO_MANIFEST_DIR"), "/src/");
+
 #[cfg(not(debug_assertions))]
 const GWIDTH: u16 = 128;
+#[cfg(not(debug_assertions))]
+const RUN_DIR: &str = ".";
+#[cfg(not(debug_assertions))]
+const SRC_DIR: &str = "./";
 
 fn main() {
     use glium::glutin;
@@ -30,18 +41,12 @@ fn main() {
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
-    let (models, m, voxelmatrix) = load_model(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/models/sponza.obj")),
-                                 Path::new(env!("CARGO_MANIFEST_DIR")), &display);
+    let (models, m, voxelmatrix) = load_model(Path::new(concatcp!(RUN_DIR, "/models/sponza.obj")),
+                                 Path::new(RUN_DIR), &display);
 
-    let image = image::load(std::io::Cursor::new(&include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/textures/text1.jpg"))),
-                            image::ImageFormat::Jpeg
-    ).unwrap().to_rgba8();
-    let image_dim = image.dimensions();
-    let image = glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dim);
-    let texture = glium::texture::Texture2d::new(&display, image).unwrap();
-    let frag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelize.frag"));
-    let vert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelize.vert"));
-    let geom = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelize.geom"));
+    let frag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.frag"))).unwrap();
+    let vert = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.vert"))).unwrap();
+    let geom = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.geom"))).unwrap();
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
 
@@ -61,8 +66,8 @@ fn main() {
     ];
     let fullscreen_rect = glium::VertexBuffer::new(&display, &fullscreen_rect).unwrap();
     let fullscreen_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-    let gridvert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelgrid.vert"));
-    let gridfrag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelgrid.frag"));
+    let gridvert = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelgrid.vert"))).unwrap();
+    let gridfrag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelgrid.frag"))).unwrap();
     let gridprog = glium::Program::from_source(&display, gridvert, gridfrag, None).unwrap();
 
     #[derive(Copy, Clone)]
@@ -76,20 +81,20 @@ fn main() {
     ).collect::<Vec<P3>>();
     let grid = glium::VertexBuffer::new(&display, &grid).unwrap();
     let grid_ind = glium::index::NoIndices(glium::index::PrimitiveType::Points);
-    let gvert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/grid.vert"));
-    let ggeom = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/grid.geom"));
-    let gfrag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/grid.frag"));
+    let gvert = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/grid.vert"))).unwrap();
+    let ggeom = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/grid.geom"))).unwrap();
+    let gfrag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/grid.frag"))).unwrap();
     let gprog = glium::Program::from_source(&display, &gvert, &gfrag, Some(&ggeom)).unwrap();
 
-    let clearvert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/gridclear.vert"));
-    let clearfrag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/gridclear.frag"));
+    let clearvert = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/gridclear.vert"))).unwrap();
+    let clearfrag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/gridclear.frag"))).unwrap();
     let clearprog = glium::Program::from_source(
         &display, clearvert, clearfrag, None
     ).unwrap();
 
-    let vxgi1vert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/vxgi1.vert"));
-    let vxgi1frag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/vxgi1.frag"));
-    let vxgi1geom = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/vxgi1.geom"));
+    let vxgi1vert = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/vxgi1.vert"))).unwrap();
+    let vxgi1frag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/vxgi1.frag"))).unwrap();
+    let vxgi1geom = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/vxgi1.geom"))).unwrap();
     let vxgi1prog = glium::Program::from_source(
         &display, &vxgi1vert, &vxgi1frag, None
     ).unwrap();
@@ -294,7 +299,6 @@ fn main() {
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *(camera_pos).as_ref(),
                                 enabled: true,
-                                tex: &texture,
                                 lpos: *lpos.as_ref(),
                                 kd: glium::uniforms::Sampler::new(&model.material.kd),
                                 ks: glium::uniforms::Sampler::new(&model.material.ks),
@@ -355,7 +359,6 @@ fn main() {
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *camera_pos.as_ref(),
                                 enabled: enabled,
-                                tex: &texture,
                                 lpos: *lpos.as_ref(),
                                 kd: glium::uniforms::Sampler::new(&model.material.kd),
                                 ks: glium::uniforms::Sampler::new(&model.material.ks),
