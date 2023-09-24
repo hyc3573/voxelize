@@ -2,5 +2,5 @@
 ;;; For more information see (info "(emacs) Directory Variables")
 
 ((nil . ((projectile-project-compilation-cmd . "cargo build")
-					(projectile-project-run-cmd . "RUST_BACKTRACE=1 cargo run")
+		 (projectile-project-run-cmd . "cd ~/Projects/voxelize/src && RUST_BACKTRACE=full cargo run")
 					(projectile-project-name . "voxelize"))))

@@ -85,8 +85,12 @@ fn main() {
 
     let vxgi1vert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.vert");
     let vxgi1frag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.frag");
+    let vxgi1geom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.geom");
     let vxgi1prog = glium::Program::from_source(
         &display, &vxgi1vert, &vxgi1frag, None
+    ).unwrap();
+    let vxgi1prog_geom = glium::Program::from_source(
+        &display, &vxgi1vert, &vxgi1frag, Some(&vxgi1geom)
     ).unwrap();
     
     let t = std::time::Instant::now();
@@ -243,7 +247,7 @@ fn main() {
                                 ),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *camera_pos.as_ref(),
-                                image: glium::uniforms::Sampler::new(&model.kd),
+                                image: glium::uniforms::Sampler::new(&model.material.kd),
                                 lpos: *lpos.as_ref()
                             },
                             &Default::default(),
@@ -262,7 +266,7 @@ fn main() {
                         framebuffer.draw(
                             &model.vbo,
                             &model.ibo,
-                            &vxgi1prog,
+                            &vxgi1prog_geom,
                             &uniform! {
                                 M: *m.as_ref(),
                                 V: *(voxelview).as_ref(),
@@ -277,11 +281,11 @@ fn main() {
                                     .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *(camera_pos).as_ref(),
-                                enabled: enabled,
+                                enabled: true,
                                 tex: &texture,
                                 lpos: *lpos.as_ref(),
-                                kd: glium::uniforms::Sampler::new(&model.kd),
-                                ks: glium::uniforms::Sampler::new(&model.ks),
+                                kd: glium::uniforms::Sampler::new(&model.material.kd),
+                                ks: glium::uniforms::Sampler::new(&model.material.ks),
                                 only_occ: true,
                                 write_vox: true,
                                 wgrid: voxelgrid2.image_unit(
@@ -364,8 +368,8 @@ fn main() {
                                 enabled: enabled,
                                 tex: &texture,
                                 lpos: *lpos.as_ref(),
-                                kd: glium::uniforms::Sampler::new(&model.kd),
-                                ks: glium::uniforms::Sampler::new(&model.ks),
+                                kd: glium::uniforms::Sampler::new(&model.material.kd),
+                                ks: glium::uniforms::Sampler::new(&model.material.ks),
                                 only_occ: only_occ,
                                 write_vox: false
                             },
@@ -407,8 +411,8 @@ fn main() {
                                 enabled: enabled,
                                 tex: &texture,
                                 lpos: *lpos.as_ref(),
-                                kd: glium::uniforms::Sampler::new(&model.kd),
-                                ks: glium::uniforms::Sampler::new(&model.ks),
+                                kd: glium::uniforms::Sampler::new(&model.material.kd),
+                                ks: glium::uniforms::Sampler::new(&model.material.ks),
                                 only_occ: only_occ,
                                 write_vox: false
                             },

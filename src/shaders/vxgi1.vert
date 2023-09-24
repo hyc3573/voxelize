@@ -4,13 +4,10 @@ in vec3 pos;
 in vec3 nor;
 in vec2 tex;
 
-out vec3 _worldnormal;
-out vec3 _viewnormal;
-out vec2 texcoord;
-out vec3 worldpos;
-out vec3 viewpos;
-out vec3 lworldpos;
-out vec3 lviewpos;
+layout (location=0) out vec3 _worldnormal;
+layout (location=1) out vec2 texcoord;
+layout (location=2) out vec3 worldpos;
+layout (location=3) out vec3 lworldpos;
 
 uniform mat4 VNM;
 uniform mat4 RNM;
@@ -25,12 +22,9 @@ vec3 LPOS = vec3(lpos.xy, lpos.z);
 
 void main()
 {
-    viewpos = (V*M*vec4(pos, 1.0)).xyz;
     gl_Position = P*V*M*vec4(pos, 1.0);
     _worldnormal = mat3(VNM)*nor;
-    _viewnormal = mat3(RNM)*nor;
     texcoord = tex;
     worldpos = (VP*VV*M*vec4(pos, 1.0)+vec4(1.0, 1.0, 1.0, 0.0)).xyz/2.0;
     lworldpos = LPOS;
-    lviewpos = (V*vec4(LPOS, 1.0)).xyz;
 }

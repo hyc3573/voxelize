@@ -5,13 +5,10 @@
 #define APT PI/16.
 #define BIAS 0.01
 
-in vec3 _worldnormal;
-in vec3 _viewnormal;
-in vec2 texcoord;
-in vec3 worldpos;
-in vec3 viewpos;
-in vec3 lworldpos;
-in vec3 lviewpos;
+layout (location=0) in vec3 _worldnormal;
+layout (location=1) in vec2 texcoord;
+layout (location=2) in vec3 worldpos;
+layout (location=3) in vec3 _lworldpos;
 uniform sampler3D grid;
 uniform uint GWIDTH;
 uniform vec3 cameraworldpos;
@@ -27,9 +24,9 @@ uniform sampler2D ks;
 out vec4 fragcolor;
 
 float gwidth = float(GWIDTH);
+vec3 lworldpos = _lworldpos + vec3(0.5, 0.5, 0.5);
 vec3 ldir = normalize(lworldpos - worldpos);
 vec3 worldnormal = normalize(_worldnormal);
-vec3 viewnormal = normalize(_viewnormal);
 float bias = 1.5/gwidth;
 
 float radius2miplvl(float radius) {
@@ -139,7 +136,7 @@ void main() {
         spec += trace(PI/6., refldir).rgb;
         clr += spec;
         
-        clr /= 4;
+        // clr /= 4;
         
         fragcolor = vec4(clr, diffusecolor.a);
     } else if (!enabled) {
@@ -153,7 +150,7 @@ void main() {
         imageStore(
             wgrid,
             ivec3(
-                (worldpos+vec3(1.,1.,1.)*gwidth/2.)
+                (worldpos*gwidth)
             ),
             vec4(fragcolor.rgb, 1.0)
         );

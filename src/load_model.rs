@@ -1,6 +1,7 @@
 use glium::{self, index::IndexBuffer, vertex::VertexBuffer};
 use image::{io::Reader, GenericImageView};
 use std::{iter::zip, f32::INFINITY, path::Path};
+use std::rc::Rc;
 use tobj;
 use nalgebra_glm as glm;
 
@@ -12,11 +13,15 @@ pub struct Vertex {
 }
 implement_vertex!(Vertex, pos, nor, tex);
 
+pub struct Material {
+    pub kd: glium::Texture2d,
+    pub ks: glium::Texture2d
+}
+
 pub struct Model {
     pub vbo: glium::VertexBuffer<Vertex>,
     pub ibo: glium::IndexBuffer<u32>,
-    pub kd: glium::Texture2d,
-    pub ks: glium::Texture2d
+    pub material: Rc::<Material>
 }
 
 fn get_texture_or_value_or_default(
@@ -25,8 +30,6 @@ fn get_texture_or_value_or_default(
     value: &Option<[f32; 3]>,
     default: [f32; 3]
 ) -> glium::Texture2d {
-    println!("loading texture");
-    
     match texturepath {
         Some(texture) => {
             let image = Reader::open(texture).unwrap().decode().unwrap().to_rgba8();
@@ -50,6 +53,21 @@ pub fn load_model(
 
     let materials = materials.expect("Failed to load matching MTL file");
 
+    let mut preload_textures = Vec::<Rc<Material>>::new();
+    preload_textures.reserve_exact(materials.len()+1);
+
+    for (i, mat) in materials.iter().enumerate() {
+        println!("Loading texture: {}", mat.name);
+        let kd = get_texture_or_value_or_default(display, &mat.diffuse_texture, &mat.diffuse, [1., 1., 1.]);
+        let ks = get_texture_or_value_or_default(display, &mat.specular_texture, &mat.specular, [1., 1., 1.]);
+
+        preload_textures.push(Rc::new(Material {kd, ks}));
+    }
+    preload_textures.push(Rc::new(Material {
+        kd: get_texture_or_value_or_default(display, &None, &None, [1., 1., 1.,]),
+        ks: get_texture_or_value_or_default(display, &None, &None, [1., 1., 1.,]),
+    }));
+
     let mut buffers = Vec::<Model>::new();
     buffers.reserve_exact(models.len());
 
@@ -62,7 +80,6 @@ pub fn load_model(
 
         let mesh = &model.mesh;
         
-        println!("{}", mesh.normals.chunks(3).len());
         for ((pos, nor), tex) in zip(
             zip(mesh.positions.chunks(3), mesh.normals.chunks(3)),
             mesh.texcoords.chunks(2),
@@ -78,34 +95,11 @@ pub fn load_model(
             // 꼭짓점 벡터에 저장
 
             let vec = glm::vec3(pos[0], pos[1], pos[2]);
-            println!("{}", vec);
             maxcoord = glm::max2(&maxcoord, &vec);
             mincoord = glm::min2(&mincoord, &vec);
         }
 
-        let mut ks: glium::Texture2d;
-        let mut kd: glium::Texture2d;
-
-        match mesh.material_id {
-            Some(i) => {
-                kd = get_texture_or_value_or_default(
-                    display,
-                    &materials[i].diffuse_texture,
-                    &materials[i].diffuse,
-                    [1., 1., 1.]
-                );
-                ks = get_texture_or_value_or_default(
-                    display,
-                    &materials[i].specular_texture,
-                    &materials[i].specular,
-                    [0., 0., 0.]
-                );
-            }
-            None => {
-                kd = get_texture_or_value_or_default(display, &None, &None, [1., 1., 1.]);
-                ks = get_texture_or_value_or_default(display, &None, &None, [0., 0., 0.]);
-            }
-        }
+        let id = mesh.material_id.unwrap_or(materials.len());
 
         buffers.push(Model {
             vbo: glium::VertexBuffer::<Vertex>::new(display, &vertexes).unwrap(),
@@ -114,12 +108,9 @@ pub fn load_model(
                 glium::index::PrimitiveType::TrianglesList,
                 mesh.indices.as_slice(),
             ).unwrap(),
-            ks,
-            kd
+            material: Rc::clone(&preload_textures[id])
         }); // OpenGL Vertex Buffer Object 생성
     }
-
-    println!("{} {}", mincoord, maxcoord);
 
     let size = (maxcoord - mincoord)/2.;
     let sizesc = size.max();
