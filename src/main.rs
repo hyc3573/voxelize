@@ -168,8 +168,8 @@ fn main() {
                 dtclock = std::time::Instant::now();
                 
                 let repaint_after = egui_glium.run(&display, |egui_ctx| {
-                    egui::SidePanel::left("adf").show(egui_ctx, |ui| {
-                        ui.heading("asdf");
+                    egui::SidePanel::left("Controls!").show(egui_ctx, |ui| {
+                        ui.heading(format!("FPS: {}", 1./dt));
                         ui.label(format!("Light pos:"));
                         ui.label(format!("x: {x}, y: {y}, z: {z}",
                                          x = lpos.x,
