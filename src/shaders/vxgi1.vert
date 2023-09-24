@@ -12,6 +12,7 @@ layout (location=3) out vec3 lworldpos;
 uniform mat4 VNM;
 uniform mat4 RNM;
 uniform mat4 M;
+uniform mat4 VM;
 uniform mat4 V;
 uniform mat4 P;
 uniform mat4 VP;
@@ -25,6 +26,6 @@ void main()
     gl_Position = P*V*M*vec4(pos, 1.0);
     _worldnormal = mat3(VNM)*nor;
     texcoord = tex;
-    worldpos = (VP*VV*M*vec4(pos, 1.0)+vec4(1.0, 1.0, 1.0, 0.0)).xyz/2.0;
+    worldpos = (VM*vec4(pos, 1.0)+vec4(1.0, 1.0, 1.0, 0.0)).xyz/2.0;
     lworldpos = LPOS;
 }

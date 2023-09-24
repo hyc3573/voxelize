@@ -15,13 +15,14 @@ implement_vertex!(Vertex, pos, nor, tex);
 
 pub struct Material {
     pub kd: glium::Texture2d,
-    pub ks: glium::Texture2d
+    pub ks: glium::Texture2d,
 }
 
 pub struct Model {
     pub vbo: glium::VertexBuffer<Vertex>,
     pub ibo: glium::IndexBuffer<u32>,
-    pub material: Rc::<Material>
+    pub material: Rc::<Material>,
+    pub shininess: f32
 }
 
 fn get_texture_or_value_or_default(
@@ -52,7 +53,7 @@ pub fn load_model(
     model_objpath: &Path,
     model_texpath: &Path,
     display: &dyn glium::backend::Facade,
-) -> (Vec<Model>, glm::Mat4) {
+) -> (Vec<Model>, glm::Mat4, glm::Mat4) {
     let model = tobj::load_obj(model_objpath, &tobj::GPU_LOAD_OPTIONS);
 
     let (models, materials) = model.expect(&format!("Failed to import: {}", model_objpath.to_str().unwrap()));
@@ -66,7 +67,6 @@ pub fn load_model(
         println!("Loading texture: {}", mat.name);
         let kd = get_texture_or_value_or_default(display, mat.diffuse_texture.as_ref().map(Path::new), model_texpath, &mat.diffuse, [1., 1., 1.]);
         let ks = get_texture_or_value_or_default(display, mat.specular_texture.as_ref().map(Path::new), model_texpath, &mat.specular, [1., 1., 1.]);
-
         preload_textures.push(Rc::new(Material {kd, ks}));
     }
     preload_textures.push(Rc::new(Material {
@@ -106,6 +106,14 @@ pub fn load_model(
         }
 
         let id = mesh.material_id.unwrap_or(materials.len());
+        let shininess = match mesh.material_id {
+            None => {
+                0.5
+            }
+            Some(i) => {
+                materials[i].shininess.unwrap_or(0.5)
+            }
+        };
 
         buffers.push(Model {
             vbo: glium::VertexBuffer::<Vertex>::new(display, &vertexes).unwrap(),
@@ -114,7 +122,8 @@ pub fn load_model(
                 glium::index::PrimitiveType::TrianglesList,
                 mesh.indices.as_slice(),
             ).unwrap(),
-            material: Rc::clone(&preload_textures[id])
+            material: Rc::clone(&preload_textures[id]),
+            shininess
         }); // OpenGL Vertex Buffer Object 생성
     }
 
@@ -128,5 +137,18 @@ pub fn load_model(
         &(-position)
     );
 
-    (buffers, modelmat)
+    let modelmat = glm::scale(
+        &glm::translation(&(-position)),
+        &sizevec
+    );
+
+    let modelmat = glm::scaling(&glm::vec3(0.01, 0.01, 0.01));
+
+    let voxelmat = glm::ortho(
+        mincoord.x, maxcoord.x,
+        mincoord.y, maxcoord.y,
+        mincoord.z, maxcoord.z
+    );
+
+    (buffers, modelmat, voxelmat)
 }

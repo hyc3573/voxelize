@@ -2,8 +2,9 @@
 #pragma optionNV (unroll all)
 
 #define PI 3.1415926538
-#define APT PI/16.
+#define APT PI/32.
 #define BIAS 0.01
+#define beta 2.0
 
 layout (location=0) in vec3 _worldnormal;
 layout (location=1) in vec2 texcoord;
@@ -14,12 +15,16 @@ uniform uint GWIDTH;
 uniform vec3 cameraworldpos;
 uniform bool enabled;
 uniform bool only_occ;
+uniform bool enable_indspec;
+uniform bool enable_inddiff;
+uniform bool enable_dir;
 uniform sampler2D tex;
 uniform bool write_vox;
 uniform layout (rgba32f) writeonly image3D wgrid;
 
 uniform sampler2D kd;
 uniform sampler2D ks;
+uniform float shininess;
 
 out vec4 fragcolor;
 
@@ -27,7 +32,7 @@ float gwidth = float(GWIDTH);
 vec3 lworldpos = _lworldpos + vec3(0.5, 0.5, 0.5);
 vec3 ldir = normalize(lworldpos - worldpos);
 vec3 worldnormal = normalize(_worldnormal);
-float bias = 1.5/gwidth;
+float bias = 4.0/gwidth;
 
 float radius2miplvl(float radius) {
     return log2(radius*gwidth*2.0);
@@ -41,22 +46,22 @@ float occlusiontrace() {
     radius = dist*tan(APT/2.);
 
     while (opacity < 1.0) {
-        pos = worldpos + dist*ldir;
+        pos = worldpos + dist*ldir + worldnormal*bias*0.0;
 
         vec3 clamped = clamp(pos, 0.,1.);
         if (dot(pos - lworldpos, pos - lworldpos) < radius*radius) {
-            opacity /= 2.0;
+            // opacity /= 2.0;
             break;
         }
         if (clamped != pos) {
-            // this means that lpos is outside of NDC boundary
+            opacity = 1.0;;
             break;
         }
         radius = dist*tan(APT/2.);
         vec4 rgba = textureLod(grid, pos, radius2miplvl(radius));
-        float newopacity = rgba.a; 
-        opacity +=(1.-opacity)* newopacity/dist;
-        dist += radius*2;
+        float newopacity = rgba.a/2.; 
+        opacity +=(1.-opacity)* newopacity/dist/beta;
+        dist += radius*2/beta;
     }
     opacity = min(1., opacity);
 
@@ -83,7 +88,7 @@ vec4 trace(float apt, vec3 dir) {
             color.a*color.rgb + (1.0-color.a)*rgba.a*rgba.rgb,
             color.a+(1.0-color.a)*rgba.a
         );
-        dist += radius*2;
+        dist += radius*2/beta;
     }
     color.a = 1.0;
     
@@ -92,13 +97,14 @@ vec4 trace(float apt, vec3 dir) {
 
 void main() { 
     vec4 diffusecolor = texture(kd, texcoord);
+
     vec4 speccolor = texture(ks, texcoord);
     
     float directdiffuse = max(dot(ldir, worldnormal), 0.0);
 
     vec3 viewdir = normalize(cameraworldpos - worldpos);
     vec3 reflectdir = reflect(-ldir, worldnormal);
-    float directspec = pow(max(dot(viewdir, reflectdir), 0.0), 32);
+    float directspec = pow(max(dot(viewdir, reflectdir), 0.0), shininess);
 
     vec3 direct = diffusecolor.rgb*directdiffuse+speccolor.rgb*directspec;
 
@@ -128,15 +134,18 @@ void main() {
         dir = 0.7071f * N - 0.7071f * (0.309f * T - 0.951f * B);
         inddiff += trace(PI/3., dir).rgb;
 
-        vec3 clr = direct;
-        clr += inddiff/6.;
+        vec3 clr = vec3(0., 0., 0.);
+        if (enable_dir)
+            clr += direct;
+
+        if (enable_inddiff)
+            clr += inddiff*diffusecolor.rgb*5.;
 
         vec3 refldir = -reflect(viewdir, worldnormal);
         vec3 spec = vec3(0., 0., 0.);
-        spec += trace(PI/6., refldir).rgb;
-        clr += spec;
-        
-        // clr /= 4;
+        spec += (trace(PI/16., refldir).rgb)*1.0;
+        if (enable_indspec)
+            clr += spec*diffusecolor.rgb;
         
         fragcolor = vec4(clr, diffusecolor.a);
     } else if (!enabled) {
@@ -152,7 +161,7 @@ void main() {
             ivec3(
                 (worldpos*gwidth)
             ),
-            vec4(fragcolor.rgb, 1.0)
+            fragcolor
         );
     }
 }

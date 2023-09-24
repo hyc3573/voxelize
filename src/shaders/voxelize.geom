@@ -10,6 +10,8 @@ out vec3 clippos;
 out vec3 nor;                
 out vec2 tex;                  
 
+uniform uint GWIDTH;
+
 void main() {
     // compute dominant axis
     vec4 A = gl_in[0].gl_Position - gl_in[1].gl_Position;
@@ -28,19 +30,21 @@ void main() {
         vec3 P = gl_in[i].gl_Position.xyz;
         if (N.z > N.x && N.z > N.y)
         {
-            newpos[i] = vec3(P.x, P.y, 0.f);
+            newpos[i] = vec3(P.x, P.y, P.z);
             
         }
         else if (N.x > N.z && N.x > N.y)
         {
-            newpos[i] = vec3(P.y, P.z, 0.f);
+            newpos[i] = vec3(P.y, P.z, P.x);
         }
         else
         {
-            newpos[i] = vec3(P.x, P.z, 0.f);
+            newpos[i] = vec3(P.x, P.z, P.y);
         }
-    
-        gl_Position = vec4(newpos[i], 1.0);
+
+        vec3 correction = normalize(G.xyz - newpos[i])*(5./float(GWIDTH));
+
+        gl_Position = vec4(newpos[i]+correction, 1.0);
         clippos = position[i];
         tex = texcoord[i];
         nor = normal[i];

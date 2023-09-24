@@ -13,7 +13,7 @@ vec3 LPOS = vec3(lpos.xy, -lpos.z);
 
 void main() {
     vec4 diffcolor = texture(image, tex);
-    
+
     vec3 ldir = normalize(LPOS-clippos);
 
     float diff = max(dot(ldir, nor), 1.0);

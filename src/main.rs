@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate glium;
-use std::rc::Rc;
+use std::{rc::Rc, default};
 
 use crate::load_model::load_model;
 use glium::{
@@ -16,6 +16,9 @@ use egui_glium;
 
 mod load_model;
 
+#[cfg(debug_assertions)]
+const GWIDTH: u16 = 64;
+#[cfg(not(debug_assertions))]
 const GWIDTH: u16 = 128;
 
 fn main() {
@@ -27,7 +30,7 @@ fn main() {
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
-    let (models, m) = load_model(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/models/sponza.obj")),
+    let (models, m, voxelmatrix) = load_model(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/models/sponza.obj")),
                                  Path::new(env!("CARGO_MANIFEST_DIR")), &display);
 
     let image = image::load(std::io::Cursor::new(&include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/textures/text1.jpg"))),
@@ -145,8 +148,13 @@ fn main() {
     let mut key_n = false;
     let mut key_m = false;
 
+    let mut speed = 0.5;
+
     let mut enabled = false;
     let mut only_occ = false;
+    let mut eid = true;
+    let mut eis = true;
+    let mut ed = true;
 
     event_loop.run(move |ev, _, control_flow| {
         
@@ -173,6 +181,10 @@ fn main() {
                         ui.add(egui::Slider::new(&mut kid, 0.0..=2.0).text("kid"));
                         ui.add(egui::Slider::new(&mut kis, 0.0..=2.0).text("kis"));
                         ui.toggle_value(&mut only_occ, "Only occlusion");
+                        ui.toggle_value(&mut eid, "Indirect Diffuse");
+                        ui.toggle_value(&mut eis, "Indirect Specular");
+                        ui.toggle_value(&mut ed, "Direct");
+                        ui.add(egui::Slider::new(&mut speed, 0.0..=5.0).text("speed"));
                     });
                 });
                 
@@ -237,9 +249,7 @@ fn main() {
                             &model.ibo,
                             &program,
                             &uniform! {
-                                M: *m.as_ref(),
-                                V: *voxelview.as_ref(),
-                                P: *voxelproj.as_ref(),
+                                M: *voxelmatrix.as_ref(),
                                 VNM: *(normalmat).as_ref(),
                                 grid: voxelgrid1.image_unit(
                                     glium::uniforms::ImageUnitFormat::RGBA32F
@@ -261,7 +271,7 @@ fn main() {
 
                 // voxelize direct illumination
                 {
-                    let vnormalmat = glm::inverse_transpose(voxelview*m);
+                    let vnormalmat = glm::inverse_transpose(voxelview*voxelmatrix);
                     let rnormalmat = glm::inverse_transpose(voxelview*m);
                     for model in &models {
                         framebuffer.draw(
@@ -269,17 +279,18 @@ fn main() {
                             &model.ibo,
                             &vxgi1prog_geom,
                             &uniform! {
-                                M: *m.as_ref(),
+                                M: *voxelmatrix.as_ref(),
                                 V: *(voxelview).as_ref(),
                                 P: *voxelproj.as_ref(),
                                 VP: *voxelproj.as_ref(),
                                 VV: *voxelview.as_ref(),
+                                VM: *voxelmatrix.as_ref(),
                                 VNM: *vnormalmat.as_ref(),
                                 RNM: *rnormalmat.as_ref(),
                                 grid: glium::uniforms::Sampler::new(&voxelgrid1)
                                     .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
                                     .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-                                    .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
+                                    .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *(camera_pos).as_ref(),
                                 enabled: true,
@@ -287,7 +298,11 @@ fn main() {
                                 lpos: *lpos.as_ref(),
                                 kd: glium::uniforms::Sampler::new(&model.material.kd),
                                 ks: glium::uniforms::Sampler::new(&model.material.ks),
+                                shininess: model.shininess,
                                 only_occ: true,
+                                enable_indspec: false,
+                                enable_inddiff: false,
+                                enable_dir: true,
                                 write_vox: true,
                                 wgrid: voxelgrid2.image_unit(
                                     glium::uniforms::ImageUnitFormat::RGBA32F
@@ -309,34 +324,6 @@ fn main() {
                 target.clear_color(0.0, 0.0, 0.0, 1.0);
                 target.clear_depth(1.0);
 
-                // draw voxel grid
-                if draw_grid && !draw_voxelization_camera{
-                    for i in 0..i32::from(GWIDTH) {
-                        target.draw(
-                            &fullscreen_rect,
-                            fullscreen_ind,
-                            &gridprog,
-                            &uniform! {
-                                grid: glium::uniforms::Sampler::new(&voxelgrid2)
-                                .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
-                                .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-                                .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
-                                depth: i,
-                                GWIDTH: GWIDTH,
-                                matrix: *matrix.as_ref()
-                            },
-                            &glium::DrawParameters {
-                                depth: glium::Depth {
-                                    test: glium::draw_parameters::DepthTest::IfLess,
-                                    write: true,
-                                    ..Default::default()
-                                },
-                                ..Default::default()
-                            }
-                        ).unwrap();
-                    }
-                }
-
                 let view = glm::look_at::<f32>(
                     &camera_pos, &(camera_pos+camera_dir), &glm::vec3(0., 1., 0.)
                 );
@@ -345,7 +332,7 @@ fn main() {
 
                 // draw scene
                 if !draw_grid && !draw_voxelization_camera {
-                    let vnormalmat = glm::inverse_transpose(voxelview*m);
+                    let vnormalmat = glm::inverse_transpose(voxelview*voxelmatrix);
                     let rnormalmat = glm::inverse_transpose(view*m);
                     for model in &models {
                         target.draw(
@@ -358,12 +345,13 @@ fn main() {
                                 P: *pers.as_ref(),
                                 VP: *voxelproj.as_ref(),
                                 VV: *voxelview.as_ref(),
+                                VM: *voxelmatrix.as_ref(),
                                 VNM: *vnormalmat.as_ref(),
                                 RNM: *rnormalmat.as_ref(),
                                 grid: glium::uniforms::Sampler::new(&voxelgrid2)
                                 .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
                                 .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-                                .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
+                                .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *camera_pos.as_ref(),
                                 enabled: enabled,
@@ -371,7 +359,11 @@ fn main() {
                                 lpos: *lpos.as_ref(),
                                 kd: glium::uniforms::Sampler::new(&model.material.kd),
                                 ks: glium::uniforms::Sampler::new(&model.material.ks),
+                                shininess: model.shininess,
                                 only_occ: only_occ,
+                                enable_indspec: eis,
+                                enable_inddiff: eid,
+                                enable_dir: ed,
                                 write_vox: false
                             },
                             &glium::DrawParameters {
@@ -380,49 +372,7 @@ fn main() {
                                     write: true,
                                     ..Default::default()
                                 },
-                                ..Default::default()
-                            }
-                        ).unwrap();
-                    }
-                }
-
-                // draw scene
-                if !draw_grid && draw_voxelization_camera {
-                    let vnormalmat = glm::inverse_transpose(voxelview*m);
-                    let rnormalmat = glm::inverse_transpose(voxelview*model_rot_mat*m);
-                    for model in &models {
-                        target.draw(
-                            &model.vbo,
-                            &model.ibo,
-                            &vxgi1prog,
-                            &uniform! {
-                                M: *m.as_ref(),
-                                V: *(voxelview*model_rot_mat).as_ref(),
-                                P: *voxelproj.as_ref(),
-                                VP: *voxelproj.as_ref(),
-                                VV: *voxelview.as_ref(),
-                                VNM: *vnormalmat.as_ref(),
-                                RNM: *rnormalmat.as_ref(),
-                                grid: glium::uniforms::Sampler::new(&voxelgrid2)
-                                .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
-                                .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-                                .wrap_function(glium::uniforms::SamplerWrapFunction::Clamp),
-                                GWIDTH: GWIDTH,
-                                cameraworldpos: *(camera_pos).as_ref(),
-                                enabled: enabled,
-                                tex: &texture,
-                                lpos: *lpos.as_ref(),
-                                kd: glium::uniforms::Sampler::new(&model.material.kd),
-                                ks: glium::uniforms::Sampler::new(&model.material.ks),
-                                only_occ: only_occ,
-                                write_vox: false
-                            },
-                            &glium::DrawParameters {
-                                depth: glium::Depth {
-                                    test: glium::draw_parameters::DepthTest::IfLess,
-                                    write: true,
-                                    ..Default::default()
-                                },
+                                blend: glium::Blend::alpha_blending(),
                                 ..Default::default()
                             }
                         ).unwrap();
@@ -433,7 +383,6 @@ fn main() {
 
                 target.finish().unwrap();               
 
-                let speed = 0.5;
                 let angspeed = glm::pi::<f32>()/2.;
                 if key_w {
                     camera_pos += camera_dir*speed*dt;
@@ -482,22 +431,22 @@ fn main() {
                     )
                 }
                 if key_i {
-                    lpos.y += speed*dt;
+                    lpos.y += 0.1*dt;
                 }
                 if key_j {
-                    lpos.x += speed*dt;
+                    lpos.x += 0.1*dt;
                 }
                 if key_k {
-                    lpos.y -= speed*dt;
+                    lpos.y -= 0.1*dt;
                 }
                 if key_l {
-                    lpos.x -= speed*dt;
+                    lpos.x -= 0.1*dt;
                 }
                 if key_n {
-                    lpos.z += speed*dt;
+                    lpos.z += 0.1*dt;
                 }
                 if key_m {
-                    lpos.z -= speed*dt;
+                    lpos.z -= 0.1*dt;
                 }
 
             }
