@@ -27,17 +27,18 @@ fn main() {
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
-    let (models, m) = load_model(Path::new("/home/yuchan/Projects/voxelize/src/models/sponza.obj"), &display);
+    let (models, m) = load_model(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/models/sponza.obj")),
+                                 Path::new(env!("CARGO_MANIFEST_DIR")), &display);
 
-    let image = image::load(std::io::Cursor::new(&include_bytes!("/home/yuchan/Projects/voxelize/src/textures/text1.jpg")),
+    let image = image::load(std::io::Cursor::new(&include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/textures/text1.jpg"))),
                             image::ImageFormat::Jpeg
     ).unwrap().to_rgba8();
     let image_dim = image.dimensions();
     let image = glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dim);
     let texture = glium::texture::Texture2d::new(&display, image).unwrap();
-    let frag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.frag");
-    let vert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.vert");
-    let geom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelize.geom");
+    let frag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelize.frag"));
+    let vert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelize.vert"));
+    let geom = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelize.geom"));
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
 
@@ -57,8 +58,8 @@ fn main() {
     ];
     let fullscreen_rect = glium::VertexBuffer::new(&display, &fullscreen_rect).unwrap();
     let fullscreen_ind = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-    let gridvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelgrid.vert");
-    let gridfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/voxelgrid.frag");
+    let gridvert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelgrid.vert"));
+    let gridfrag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/voxelgrid.frag"));
     let gridprog = glium::Program::from_source(&display, gridvert, gridfrag, None).unwrap();
 
     #[derive(Copy, Clone)]
@@ -72,20 +73,20 @@ fn main() {
     ).collect::<Vec<P3>>();
     let grid = glium::VertexBuffer::new(&display, &grid).unwrap();
     let grid_ind = glium::index::NoIndices(glium::index::PrimitiveType::Points);
-    let gvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.vert");
-    let ggeom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.geom");
-    let gfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/grid.frag");
+    let gvert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/grid.vert"));
+    let ggeom = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/grid.geom"));
+    let gfrag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/grid.frag"));
     let gprog = glium::Program::from_source(&display, &gvert, &gfrag, Some(&ggeom)).unwrap();
 
-    let clearvert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/gridclear.vert");
-    let clearfrag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/gridclear.frag");
+    let clearvert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/gridclear.vert"));
+    let clearfrag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/gridclear.frag"));
     let clearprog = glium::Program::from_source(
         &display, clearvert, clearfrag, None
     ).unwrap();
 
-    let vxgi1vert = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.vert");
-    let vxgi1frag = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.frag");
-    let vxgi1geom = include_str!("/home/yuchan/Projects/voxelize/src/shaders/vxgi1.geom");
+    let vxgi1vert = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/vxgi1.vert"));
+    let vxgi1frag = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/vxgi1.frag"));
+    let vxgi1geom = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shaders/vxgi1.geom"));
     let vxgi1prog = glium::Program::from_source(
         &display, &vxgi1vert, &vxgi1frag, None
     ).unwrap();

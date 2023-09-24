@@ -1,6 +1,6 @@
 use glium::{self, index::IndexBuffer, vertex::VertexBuffer};
 use image::{io::Reader, GenericImageView};
-use std::{iter::zip, f32::INFINITY, path::Path};
+use std::{iter::zip, f32::INFINITY, path::Path, path::PathBuf};
 use std::rc::Rc;
 use tobj;
 use nalgebra_glm as glm;
@@ -26,13 +26,18 @@ pub struct Model {
 
 fn get_texture_or_value_or_default(
     display: &dyn glium::backend::Facade,
-    texturepath: &Option<String>,
+    texturename: Option<&Path>,
+    texturepath: &Path,
     value: &Option<[f32; 3]>,
     default: [f32; 3]
 ) -> glium::Texture2d {
-    match texturepath {
+    match texturename {
         Some(texture) => {
-            let image = Reader::open(texture).unwrap().decode().unwrap().to_rgba8();
+            let mut path = PathBuf::new();
+            path.push(texturepath);
+            path.push(texture);
+            
+            let image = Reader::open(path.to_str().unwrap()).unwrap().decode().unwrap().to_rgba8();
             let img_dim = image.dimensions();
             return glium::Texture2d::new(display, glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), img_dim)).unwrap();
         }
@@ -45,6 +50,7 @@ fn get_texture_or_value_or_default(
 
 pub fn load_model(
     model_objpath: &Path,
+    model_texpath: &Path,
     display: &dyn glium::backend::Facade,
 ) -> (Vec<Model>, glm::Mat4) {
     let model = tobj::load_obj(model_objpath, &tobj::GPU_LOAD_OPTIONS);
@@ -58,14 +64,14 @@ pub fn load_model(
 
     for (i, mat) in materials.iter().enumerate() {
         println!("Loading texture: {}", mat.name);
-        let kd = get_texture_or_value_or_default(display, &mat.diffuse_texture, &mat.diffuse, [1., 1., 1.]);
-        let ks = get_texture_or_value_or_default(display, &mat.specular_texture, &mat.specular, [1., 1., 1.]);
+        let kd = get_texture_or_value_or_default(display, mat.diffuse_texture.as_ref().map(Path::new), model_texpath, &mat.diffuse, [1., 1., 1.]);
+        let ks = get_texture_or_value_or_default(display, mat.specular_texture.as_ref().map(Path::new), model_texpath, &mat.specular, [1., 1., 1.]);
 
         preload_textures.push(Rc::new(Material {kd, ks}));
     }
     preload_textures.push(Rc::new(Material {
-        kd: get_texture_or_value_or_default(display, &None, &None, [1., 1., 1.,]),
-        ks: get_texture_or_value_or_default(display, &None, &None, [1., 1., 1.,]),
+        kd: get_texture_or_value_or_default(display, None, Path::new(""),&None, [1., 1., 1.,]),
+        ks: get_texture_or_value_or_default(display, None, Path::new(""), &None, [1., 1., 1.,]),
     }));
 
     let mut buffers = Vec::<Model>::new();
