@@ -4,10 +4,11 @@ in vec3 clippos; // Geometry Shader에서 전달받은 위치 벡터
 in vec3 nor;
 in vec2 tex;
 
-uniform layout (rgba32f) writeonly image3D grid; // 3D 텍스쳐
+uniform layout (rgba32f) coherent image3D grid; // 3D 텍스쳐
 uniform uint GWIDTH; // 텍스쳐 너비
 uniform sampler2D image;
 uniform vec3 lpos;
+uniform uint lod;
 
 vec3 LPOS = vec3(lpos.xy, -lpos.z);
 

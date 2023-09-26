@@ -18,6 +18,17 @@ use load_file::load_file_str;
 
 mod load_model;
 
+const fn log2(x: u32) -> u32{
+    let mut result: u32 = 0;
+    let mut x = x;
+    while x != 0 {
+        result += x & 0x1;
+        x >>= 1;
+    }
+
+    return result;
+}
+
 #[cfg(debug_assertions)]
 const GWIDTH: u16 = 64;
 #[cfg(debug_assertions)]
@@ -26,7 +37,7 @@ const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const SRC_DIR: &str = concatcp!(env!("CARGO_MANIFEST_DIR"), "/src/");
 
 #[cfg(not(debug_assertions))]
-const GWIDTH: u16 = 128;
+const GWIDTH: u16 = 32;
 #[cfg(not(debug_assertions))]
 const RUN_DIR: &str = ".";
 #[cfg(not(debug_assertions))]
@@ -41,7 +52,7 @@ fn main() {
     let display = glium::Display::new(wb, cb, &event_loop).unwrap();
     let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
 
-    let (models, m, voxelmatrix) = load_model(Path::new(concatcp!(RUN_DIR, "/models/sponza.obj")),
+    let (models, m, voxelmatrix) = load_model(Path::new(concatcp!(RUN_DIR, "/models/spoon.obj")),
                                  Path::new(RUN_DIR), &display);
 
     let frag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.frag"))).unwrap();
@@ -111,8 +122,16 @@ fn main() {
     imunit_behav.format = ImageUnitFormat::RGBA32F;
     let imunit_behav = imunit_behav;
 
-    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
-    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let n_mipmap = u32::min(log2(GWIDTH.into()), 6);
+    let voxelgrid10 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid11 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, (GWIDTH/2).into(), (GWIDTH/2).into(), (GWIDTH/2).into()).unwrap();
+    let voxelgrid12 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(n_mipmap-2), (GWIDTH/4).into(), (GWIDTH/4).into(), (GWIDTH/4).into()).unwrap();
+
+    let voxelgrid20 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid21 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, (GWIDTH/2).into(), (GWIDTH/2).into(), (GWIDTH/2).into()).unwrap();
+    let voxelgrid22 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(n_mipmap-2), (GWIDTH/4).into(), (GWIDTH/4).into(), (GWIDTH/4).into()).unwrap();
+
+
 
     let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
         &display,
@@ -219,7 +238,7 @@ fn main() {
                         fullscreen_ind,
                         &clearprog,
                         &uniform! {
-                            grid: voxelgrid1.image_unit(
+                            grid: voxelgrid10.image_unit(
                                 glium::uniforms::ImageUnitFormat::RGBA32F
                             ).unwrap().set_access(
                                 glium::uniforms::ImageUnitAccess::Write
@@ -234,7 +253,7 @@ fn main() {
                         fullscreen_ind,
                         &clearprog,
                         &uniform! {
-                            grid: voxelgrid2.image_unit(
+                            grid: voxelgrid20.image_unit(
                                 glium::uniforms::ImageUnitFormat::RGBA32F
                             ).unwrap().set_access(
                                 glium::uniforms::ImageUnitAccess::Write
@@ -256,7 +275,7 @@ fn main() {
                             &uniform! {
                                 M: *voxelmatrix.as_ref(),
                                 VNM: *(normalmat).as_ref(),
-                                grid: voxelgrid1.image_unit(
+                                grid: voxelgrid10.image_unit(
                                     glium::uniforms::ImageUnitFormat::RGBA32F
                                 ).unwrap().set_access(
                                     glium::uniforms::ImageUnitAccess::Write
@@ -264,14 +283,15 @@ fn main() {
                                 GWIDTH: GWIDTH,
                                 cameraworldpos: *camera_pos.as_ref(),
                                 image: glium::uniforms::Sampler::new(&model.material.kd),
-                                lpos: *lpos.as_ref()
+                                lpos: *lpos.as_ref(),
+                                lod: n_mipmap
                             },
                             &Default::default(),
                         ).unwrap();
                 }
 
                 unsafe {
-                    voxelgrid1.generate_mipmaps();
+                    voxelgrid12.generate_mipmaps();
                 }
 
                 // voxelize direct illumination
@@ -292,7 +312,7 @@ fn main() {
                                 VM: *voxelmatrix.as_ref(),
                                 VNM: *vnormalmat.as_ref(),
                                 RNM: *rnormalmat.as_ref(),
-                                grid: glium::uniforms::Sampler::new(&voxelgrid1)
+                                grid: glium::uniforms::Sampler::new(&voxelgrid10)
                                     .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
                                     .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
                                     .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
@@ -308,7 +328,7 @@ fn main() {
                                 enable_inddiff: false,
                                 enable_dir: true,
                                 write_vox: true,
-                                wgrid: voxelgrid2.image_unit(
+                                wgrid: voxelgrid20.image_unit(
                                     glium::uniforms::ImageUnitFormat::RGBA32F
                                 ).unwrap().set_access(
                                     glium::uniforms::ImageUnitAccess::Write
@@ -320,7 +340,7 @@ fn main() {
                 }
 
                 unsafe {
-                    voxelgrid2.generate_mipmaps();
+                    voxelgrid22.generate_mipmaps();
                 }
 
                 let mut target = display.draw();
@@ -352,7 +372,7 @@ fn main() {
                                 VM: *voxelmatrix.as_ref(),
                                 VNM: *vnormalmat.as_ref(),
                                 RNM: *rnormalmat.as_ref(),
-                                grid: glium::uniforms::Sampler::new(&voxelgrid2)
+                                grid: glium::uniforms::Sampler::new(&voxelgrid20)
                                 .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
                                 .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
                                 .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
