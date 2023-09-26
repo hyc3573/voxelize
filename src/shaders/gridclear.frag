@@ -1,8 +1,8 @@
 #version 450 core
 
-uniform layout (rgba32f) volatile image3D grid[];
+uniform layout (rgba32f) writeonly image3D grid;
 uniform int depth;
-    
+
 void main() {
-    imageStore(grid[0], ivec3(gl_FragCoord.xy, depth), vec4(0., 0., 0., 0.));
+    imageStore(grid, ivec3(gl_FragCoord.xy, depth), vec4(0., 0., 0., 0.));
 }
