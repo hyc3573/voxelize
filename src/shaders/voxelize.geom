@@ -13,7 +13,7 @@ out vec2 tex;
 uniform uint GWIDTH;
 
 void main() {
-    // compute dominant axis
+    // 삼각형이 가장 잘 보이는 축(x, y, z)을 찾음
     vec4 A = gl_in[0].gl_Position - gl_in[1].gl_Position;
     vec4 B = gl_in[1].gl_Position - gl_in[2].gl_Position;
 
@@ -42,6 +42,7 @@ void main() {
             newpos[i] = vec3(P.x, P.z, P.y);
         }
 
+        // 삼각형 크기를 약간 키움
         vec3 correction = normalize(G.xyz - newpos[i])*(5./float(GWIDTH));
 
         gl_Position = vec4(newpos[i]+correction, 1.0);
