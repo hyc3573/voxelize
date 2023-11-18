@@ -4,7 +4,7 @@ use std::{rc::Rc, default};
 
 use crate::load_model::load_model;
 use glium::{
-    uniforms::{ImageUnitAccess, ImageUnitFormat},
+    uniforms::{ImageUnitAccess, ImageUnitFormat, ImageUnit},
     Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::event::{ModifiersState, ElementState},
 };
 use nalgebra_glm as glm;
@@ -19,7 +19,7 @@ use load_file::load_file_str;
 mod load_model;
 
 #[cfg(debug_assertions)]
-const GWIDTH: u16 = 64;
+const GWIDTH: u16 = 128;
 #[cfg(debug_assertions)]
 const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
 #[cfg(debug_assertions)]
@@ -101,6 +101,9 @@ fn main() {
     let vxgi1prog_geom = glium::Program::from_source(
         &display, &vxgi1vert, &vxgi1frag, Some(&vxgi1geom)
     ).unwrap();
+
+    let mipmapcomp = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/mipmap.glsl"))).unwrap();
+    let mipmapprog = glium::program::ComputeShader::from_source(&display, mipmapcomp).unwrap();
     
     let t = std::time::Instant::now();
     let mut dtclock = std::time::Instant::now();
@@ -108,11 +111,11 @@ fn main() {
     let mut imunit_behav: glium::uniforms::ImageUnitBehavior = Default::default();
     imunit_behav.access = ImageUnitAccess::ReadWrite;
     imunit_behav.level = 1;
-    imunit_behav.format = ImageUnitFormat::RGBA32F;
+    imunit_behav.format = ImageUnitFormat::RGBA16F;
     let imunit_behav = imunit_behav;
 
-    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
-    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
 
     let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
         &display,
@@ -220,7 +223,7 @@ fn main() {
                         &clearprog,
                         &uniform! {
                             grid: voxelgrid1.image_unit(
-                                glium::uniforms::ImageUnitFormat::RGBA32F
+                                glium::uniforms::ImageUnitFormat::RGBA16F
                             ).unwrap().set_access(
                                 glium::uniforms::ImageUnitAccess::Write
                             ),
@@ -235,7 +238,7 @@ fn main() {
                         &clearprog,
                         &uniform! {
                             grid: voxelgrid2.image_unit(
-                                glium::uniforms::ImageUnitFormat::RGBA32F
+                                glium::uniforms::ImageUnitFormat::RGBA16F
                             ).unwrap().set_access(
                                 glium::uniforms::ImageUnitAccess::Write
                             ),
@@ -257,7 +260,7 @@ fn main() {
                                 M: *voxelmatrix.as_ref(),
                                 VNM: *(normalmat).as_ref(),
                                 grid: voxelgrid1.image_unit(
-                                    glium::uniforms::ImageUnitFormat::RGBA32F
+                                    glium::uniforms::ImageUnitFormat::RGBA16F
                                 ).unwrap().set_access(
                                     glium::uniforms::ImageUnitAccess::Write
                                 ),
@@ -270,8 +273,21 @@ fn main() {
                         ).unwrap();
                 }
 
-                unsafe {
-                    voxelgrid1.generate_mipmaps();
+                let mut size = GWIDTH/2;
+                for i in 1..6 {
+                    mipmapprog.execute(
+                        uniform! {
+                            lod: (i as i32)-1,
+                            resultimg: voxelgrid1.image_unit(
+                                glium::uniforms::ImageUnitFormat::RGBA16F
+                            ).unwrap().set_access(
+                                glium::uniforms::ImageUnitAccess::Write
+                            ).set_level(i).unwrap(),
+                            sampler: &voxelgrid1
+                        },
+                        size.into(), size.into(), size.into()
+                    );
+                    size /= 2;
                 }
 
                 // voxelize direct illumination
@@ -309,7 +325,7 @@ fn main() {
                                 enable_dir: true,
                                 write_vox: true,
                                 wgrid: voxelgrid2.image_unit(
-                                    glium::uniforms::ImageUnitFormat::RGBA32F
+                                    glium::uniforms::ImageUnitFormat::RGBA16F
                                 ).unwrap().set_access(
                                     glium::uniforms::ImageUnitAccess::Write
                                 )
@@ -318,9 +334,21 @@ fn main() {
                         ).unwrap();
                     }
                 }
-
-                unsafe {
-                    voxelgrid2.generate_mipmaps();
+                let mut size = GWIDTH;
+                for i in 1..6 {
+                    mipmapprog.execute(
+                        uniform! {
+                            lod: i as i32,
+                            resultimg: voxelgrid2.image_unit(
+                                glium::uniforms::ImageUnitFormat::RGBA16F
+                            ).unwrap().set_access(
+                                glium::uniforms::ImageUnitAccess::Write
+                            ).set_level(i).unwrap(),
+                            sampler: &voxelgrid2
+                        },
+                        size.into(), size.into(), size.into()
+                    );
+                    size /= 2;
                 }
 
                 let mut target = display.draw();

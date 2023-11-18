@@ -1,10 +1,12 @@
 #version 450 core
+#extension GL_NV_shader_atomic_fp16_vector : require
+#extension GL_NV_gpu_shader5 : enable
 
 in vec3 clippos; // Geometry Shader에서 전달받은 위치 벡터
 in vec3 nor;
 in vec2 tex;
 
-uniform layout (rgba32f) writeonly image3D grid; // 3D 텍스쳐
+uniform layout (rgba16f) coherent image3D grid; // 3D 텍스쳐
 uniform uint GWIDTH; // 텍스쳐 너비
 uniform sampler2D image;
 uniform vec3 lpos;
@@ -20,13 +22,12 @@ void main() {
 
     vec3 fragcolor = diff*diffcolor.rgb;
 
-    imageStore(
+    imageAtomicMax(
         grid,
         ivec3(
             (clippos+vec3(1., 1., 1.))*float(GWIDTH)/2.
         ),
-        vec4(fragcolor,diffcolor.a)
+        f16vec4(fragcolor,diffcolor.a)
     );
-
     // 3D 텍스쳐에 Fragment 정보를 씀 (미완성)
 }

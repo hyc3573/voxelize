@@ -1,5 +1,7 @@
 #version 450 core
 #pragma optionNV (unroll all)
+#extension GL_NV_gpu_shader5 : enable
+#extension GL_NV_shader_atomic_fp16_vector : require
 
 #define PI 3.1415926538
 #define APT PI/32.
@@ -19,8 +21,7 @@ uniform bool enable_indspec;
 uniform bool enable_inddiff;
 uniform bool enable_dir;
 uniform bool write_vox;
-uniform layout (rgba32f) writeonly image3D wgrid;
-
+uniform layout (rgba16f) coherent image3D wgrid;
 uniform sampler2D kd;
 uniform sampler2D ks;
 uniform float shininess;
@@ -155,12 +156,12 @@ void main() {
     // fragcolor = vec4(viewnormal, 1.0);
 
     if (write_vox) {
-        imageStore(
+        imageAtomicMax(
             wgrid,
             ivec3(
                 (worldpos*gwidth)
             ),
-            fragcolor
+            f16vec4(fragcolor)
         );
     }
 }
