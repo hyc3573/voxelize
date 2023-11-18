@@ -5,7 +5,7 @@ use std::{rc::Rc, default};
 use crate::load_model::load_model;
 use glium::{
     uniforms::{ImageUnitAccess, ImageUnitFormat},
-    Surface, texture::{TextureAnyImage, ResidentTexture}, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::event::{ModifiersState, ElementState},
+    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::event::{ModifiersState, ElementState},
 };
 use nalgebra_glm as glm;
 use itertools::{iproduct, Itertools};
@@ -19,9 +19,7 @@ use load_file::load_file_str;
 mod load_model;
 
 #[cfg(debug_assertions)]
-const GWIDTH: u16 = 128;
-#[cfg(debug_assertions)]
-const MIPLVL: u32 = 6;
+const GWIDTH: u16 = 64;
 #[cfg(debug_assertions)]
 const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
 #[cfg(debug_assertions)]
@@ -29,8 +27,6 @@ const SRC_DIR: &str = concatcp!(env!("CARGO_MANIFEST_DIR"), "/src/");
 
 #[cfg(not(debug_assertions))]
 const GWIDTH: u16 = 128;
-#[cfg(not(debug_assertions))]
-const MIPLVL: u32 = 6;
 #[cfg(not(debug_assertions))]
 const RUN_DIR: &str = ".";
 #[cfg(not(debug_assertions))]
@@ -115,21 +111,15 @@ fn main() {
     imunit_behav.format = ImageUnitFormat::RGBA32F;
     let imunit_behav = imunit_behav;
 
-    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(MIPLVL), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
-    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(MIPLVL), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
 
-
-    let mut framebuffers = Vec::<glium::framebuffer::EmptyFrameBuffer>::with_capacity(MIPLVL.try_into().unwrap());
-    let mut div = 1;
-    for i in 0..MIPLVL {
-        let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
-            &display,
-            (GWIDTH/div).into(),
-            (GWIDTH/div).into(),
-            None, None, false
-        ).unwrap();
-        framebuffers.push(framebuffer);
-    }
+    let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
+        &display,
+        GWIDTH.into(),
+        GWIDTH.into(),
+        None, None, false
+    ).unwrap();
 
     let mut camera_pos = glm::vec3(0., 0., 0.);
     let mut camera_dir = glm::vec3(0., 0., -1.);
@@ -172,6 +162,7 @@ fn main() {
     let mut ed = true;
 
     event_loop.run(move |ev, _, control_flow| {
+        
         let next_frame_time =
             std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
@@ -180,7 +171,6 @@ fn main() {
             glutin::event::Event::MainEventsCleared => {
                 let dt = dtclock.elapsed().as_secs_f32();
                 dtclock = std::time::Instant::now();
-                let mut perfclock = std::time::Instant::now();
                 
                 let repaint_after = egui_glium.run(&display, |egui_ctx| {
                     egui::SidePanel::left("Controls!").show(egui_ctx, |ui| {
@@ -222,12 +212,9 @@ fn main() {
                 let matrix = voxelproj*voxelview*m;
                 let matrix = glm::Mat4::identity();
 
-                println!("Guitar: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now();
-
                 // clear voxel
                 for i in 0..i32::from(GWIDTH) {
-                    framebuffers[0].draw(
+                    framebuffer.draw(
                         &fullscreen_rect,
                         fullscreen_ind,
                         &clearprog,
@@ -242,7 +229,7 @@ fn main() {
                         &Default::default()
                     ).unwrap();
 
-                    framebuffers[0].draw(
+                    framebuffer.draw(
                         &fullscreen_rect,
                         fullscreen_ind,
                         &clearprog,
@@ -258,55 +245,41 @@ fn main() {
                     );
                 }
 
-                println!("Voxel clear: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now();
-
                 // voxelize
                 let normalmat = glm::inverse_transpose(voxelview*m);
-                let mut mul: f32 = 1.0;
-                for i in 0..MIPLVL {
-                    for model in &models {
-                        framebuffers[i as usize]
-                            .draw(
-                                &model.vbo,
-                                &model.ibo,
-                                &program,
-                                &uniform! {
-                                    M: *voxelmatrix.as_ref(),
-                                    VNM: *(normalmat).as_ref(),
-                                    grid: voxelgrid1.image_unit(
-                                        glium::uniforms::ImageUnitFormat::RGBA32F
-                                    ).unwrap().set_layer(Some(i)).unwrap().set_access(
-                                        glium::uniforms::ImageUnitAccess::Write
-                                    ),
-                                    GWIDTH: GWIDTH,
-                                    cameraworldpos: *camera_pos.as_ref(),
-                                    image: glium::uniforms::Sampler::new(&model.material.kd),
-                                    mul: mul,
-                                    lpos: *lpos.as_ref()
-                                },
-                                &Default::default(),
-                            ).unwrap();
-                    }
-                    mul /= 2.0;
+                for model in &models {
+                    framebuffer
+                        .draw(
+                            &model.vbo,
+                            &model.ibo,
+                            &program,
+                            &uniform! {
+                                M: *voxelmatrix.as_ref(),
+                                VNM: *(normalmat).as_ref(),
+                                grid: voxelgrid1.image_unit(
+                                    glium::uniforms::ImageUnitFormat::RGBA32F
+                                ).unwrap().set_access(
+                                    glium::uniforms::ImageUnitAccess::Write
+                                ),
+                                GWIDTH: GWIDTH,
+                                cameraworldpos: *camera_pos.as_ref(),
+                                image: glium::uniforms::Sampler::new(&model.material.kd),
+                                lpos: *lpos.as_ref()
+                            },
+                            &Default::default(),
+                        ).unwrap();
                 }
-
-                println!("First voxelize: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now();
 
                 unsafe {
-                    // voxelgrid1.generate_mipmaps();
+                    voxelgrid1.generate_mipmaps();
                 }
-                
-                println!("Mipmap 1: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now();
 
                 // voxelize direct illumination
                 {
                     let vnormalmat = glm::inverse_transpose(voxelview*voxelmatrix);
                     let rnormalmat = glm::inverse_transpose(voxelview*m);
                     for model in &models {
-                        framebuffers[0].draw(
+                        framebuffer.draw(
                             &model.vbo,
                             &model.ibo,
                             &vxgi1prog_geom,
@@ -346,15 +319,9 @@ fn main() {
                     }
                 }
 
-                println!("Second voxelize: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now();
-
                 unsafe {
                     voxelgrid2.generate_mipmaps();
                 }
-
-                println!("Mipmap 2: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now();
 
                 let mut target = display.draw();
 
@@ -415,9 +382,6 @@ fn main() {
                     }
                 }
 
-                println!("Draw: {}", perfclock.elapsed().as_secs_f32());
-                perfclock = std::time::Instant::now(); 
-                 
                 egui_glium.paint(&display, &mut target);
 
                 target.finish().unwrap();               

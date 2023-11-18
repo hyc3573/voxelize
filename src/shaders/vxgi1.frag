@@ -2,7 +2,7 @@
 #pragma optionNV (unroll all)
 
 #define PI 3.1415926538
-#define APT PI/4.
+#define APT PI/32.
 #define BIAS 0.01
 #define beta 2.0
 
@@ -68,35 +68,25 @@ float occlusiontrace() {
 }
 
 vec4 trace(float apt, vec3 dir) {
-    // 현재 위치
     vec3 pos;
-    // 색상 합
     vec4 color = vec4(0., 0., 0., 0.);
-    // 현재 반지름
     float radius;
-    // 이동 거리
     float dist = 1.0/gwidth;
 
     while (color.a < 1.0) {
-        // 위치 이동
         pos = worldpos + dist*dir;
 
         vec3 clamped = clamp(pos, 0., 1.);
 
-        // 범위 밖으로 나갔으면
         if (clamped != pos)
             break;
 
-        // 반지름 업데이트
         radius = dist*tan(apt/2);
-        // 복셀에서 색 불러옴
         vec4 rgba = textureLod(grid, pos, radius2miplvl(radius));
-        // 색상 업데이트
         color = vec4(
             color.a*color.rgb + (1.0-color.a)*rgba.a*rgba.rgb,
             color.a+(1.0-color.a)*rgba.a
         );
-        // 이동 거리 변경
         dist += radius*2/beta;
     }
     color.a = 1.0;
@@ -150,7 +140,7 @@ void main() {
         if (enable_inddiff)
             clr += inddiff*diffusecolor.rgb;
 
-        vec3 refldir = reflect(viewdir, worldnormal);
+        vec3 refldir = -reflect(viewdir, worldnormal);
         vec3 spec = vec3(0., 0., 0.);
         spec += (trace(PI/64., refldir).rgb)*1.0;
         if (enable_indspec)
