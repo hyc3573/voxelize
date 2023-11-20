@@ -1,7 +1,10 @@
 #version 450 core
 #pragma optionNV (unroll all)
 #extension GL_NV_gpu_shader5 : enable
-#extension GL_NV_shader_atomic_fp16_vector : require
+#extension GL_NV_shader_atomic_fp16_vector : enable
+#ifdef GL_NV_shader_atomic_fp16_vector
+#define atomic 1
+#endif
 
 #define PI 3.1415926538
 #define APT PI/32.
@@ -156,6 +159,7 @@ void main() {
     // fragcolor = vec4(viewnormal, 1.0);
 
     if (write_vox) {
+#ifdef atomic
         imageAtomicMax(
             wgrid,
             ivec3(
@@ -163,5 +167,14 @@ void main() {
             ),
             f16vec4(fragcolor)
         );
+#else
+        imageStore(
+            wgrid,
+            ivec3(
+                (worldpos*gwidth)
+            ),
+            vec4(fragcolor)
+        );
+#endif
     }
 }

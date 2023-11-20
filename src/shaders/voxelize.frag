@@ -1,6 +1,9 @@
 #version 450 core
-#extension GL_NV_shader_atomic_fp16_vector : require
+#extension GL_NV_shader_atomic_fp16_vector : enable
 #extension GL_NV_gpu_shader5 : enable
+#ifdef GL_NV_shader_atomic_fp16_vector
+#define atomic 1
+#endif
 
 in vec3 clippos; // Geometry Shader에서 전달받은 위치 벡터
 in vec3 nor;
@@ -22,6 +25,7 @@ void main() {
 
     vec3 fragcolor = diff*diffcolor.rgb;
 
+#ifdef atomic
     imageAtomicMax(
         grid,
         ivec3(
@@ -29,5 +33,14 @@ void main() {
         ),
         f16vec4(fragcolor,diffcolor.a)
     );
+#else
+    imageStore(
+        grid,
+        ivec3(
+            (clippos+vec3(1., 1., 1.))*float(GWIDTH)/2.
+        ),
+        vec4(fragcolor,diffcolor.a)
+    );
+#endif
     // 3D 텍스쳐에 Fragment 정보를 씀 (미완성)
 }

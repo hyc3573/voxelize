@@ -19,14 +19,18 @@ use load_file::load_file_str;
 mod load_model;
 
 #[cfg(debug_assertions)]
-const GWIDTH: u16 = 128;
+const GWIDTH: u16 = 64;
+#[cfg(debug_assertions)]
+const MIPLVL: u16 = 6;
 #[cfg(debug_assertions)]
 const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
 #[cfg(debug_assertions)]
 const SRC_DIR: &str = concatcp!(env!("CARGO_MANIFEST_DIR"), "/src/");
 
 #[cfg(not(debug_assertions))]
-const GWIDTH: u16 = 128;
+const GWIDTH: u16 = 64;
+#[cfg(not(debug_assertions))]
+const MIPLVL: u16 = 6;
 #[cfg(not(debug_assertions))]
 const RUN_DIR: &str = ".";
 #[cfg(not(debug_assertions))]
@@ -114,8 +118,8 @@ fn main() {
     imunit_behav.format = ImageUnitFormat::RGBA16F;
     let imunit_behav = imunit_behav;
 
-    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
-    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(6), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(MIPLVL.into()), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(MIPLVL.into()), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
 
     let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
         &display,
@@ -274,7 +278,7 @@ fn main() {
                 }
 
                 let mut size = GWIDTH/2;
-                for i in 1..6 {
+                for i in 1..(MIPLVL-1) {
                     mipmapprog.execute(
                         uniform! {
                             lod: (i as i32)-1,
@@ -282,7 +286,7 @@ fn main() {
                                 glium::uniforms::ImageUnitFormat::RGBA16F
                             ).unwrap().set_access(
                                 glium::uniforms::ImageUnitAccess::Write
-                            ).set_level(i).unwrap(),
+                            ).set_level(i.into()).unwrap(),
                             sampler: &voxelgrid1
                         },
                         size.into(), size.into(), size.into()
@@ -335,7 +339,7 @@ fn main() {
                     }
                 }
                 let mut size = GWIDTH;
-                for i in 1..6 {
+                for i in 1..(MIPLVL-1) {
                     mipmapprog.execute(
                         uniform! {
                             lod: i as i32,
@@ -343,7 +347,7 @@ fn main() {
                                 glium::uniforms::ImageUnitFormat::RGBA16F
                             ).unwrap().set_access(
                                 glium::uniforms::ImageUnitAccess::Write
-                            ).set_level(i).unwrap(),
+                            ).set_level(i.into()).unwrap(),
                             sampler: &voxelgrid2
                         },
                         size.into(), size.into(), size.into()
