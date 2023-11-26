@@ -10,7 +10,7 @@ out vec3 normal;
 out vec2 texcoord;
 // 출력 매개변수 선언
 
-uniform mat4 VNM;
+uniform mat3 VNM;
 uniform mat4 M;
 // 유니폼 매개변수 선언
 

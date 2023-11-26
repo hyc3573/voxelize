@@ -3,3 +3,5 @@ models/*
 textures/*
 target/*
 .projectile
+/perf.data
+/src/perf.data

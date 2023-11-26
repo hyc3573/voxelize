@@ -9,8 +9,8 @@ layout (location=1) out vec2 texcoord;
 layout (location=2) out vec3 worldpos;
 layout (location=3) out vec3 lworldpos;
 
-uniform mat4 VNM;
-uniform mat4 RNM;
+uniform mat3 VNM;
+uniform mat3 RNM;
 uniform mat4 M;
 uniform mat4 VM;
 uniform mat4 V;

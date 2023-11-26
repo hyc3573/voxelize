@@ -8,8 +8,8 @@
 
 #define PI 3.1415926538
 #define APT PI/32.
-#define BIAS 0.01
-#define beta 2.0
+#define beta 1.5 
+#define LSTR 0.25
 
 layout (location=0) in vec3 _worldnormal;
 layout (location=1) in vec2 texcoord;
@@ -62,8 +62,8 @@ float occlusiontrace() {
         }
         radius = dist*tan(APT/2.);
         vec4 rgba = textureLod(grid, pos, radius2miplvl(radius));
-        float newopacity = rgba.a/2.; 
-        opacity +=(1.-opacity)* newopacity/dist/beta;
+        float newopacity = rgba.a; 
+        opacity +=(1.-opacity)*newopacity;
         dist += radius*2/beta;
     }
     opacity = min(1., opacity);
@@ -75,7 +75,7 @@ vec4 trace(float apt, vec3 dir) {
     vec3 pos;
     vec4 color = vec4(0., 0., 0., 0.);
     float radius;
-    float dist = 1.0/gwidth;
+    float dist = bias;
 
     while (color.a < 1.0) {
         pos = worldpos + dist*dir;
@@ -105,7 +105,8 @@ void main() {
     
     float directdiffuse = max(dot(ldir, worldnormal), 0.0);
 
-    vec3 viewdir = normalize(cameraworldpos - worldpos);
+    vec3 cwp = vec3(cameraworldpos.x, cameraworldpos.y, cameraworldpos.z);
+    vec3 viewdir = normalize(cwp - worldpos);
     vec3 reflectdir = reflect(-ldir, worldnormal);
     float directspec = pow(max(dot(viewdir, reflectdir), 0.0), shininess);
 
@@ -114,7 +115,7 @@ void main() {
     if (enabled)
     {
         float occlusion = occlusiontrace();
-        direct *= (1-occlusion);
+        direct *= (1-occlusion)/dot(worldpos - lworldpos, worldpos - lworldpos)*LSTR;
     }
     
     if (enabled && !only_occ) {
@@ -142,11 +143,11 @@ void main() {
             clr += direct;
 
         if (enable_inddiff)
-            clr += inddiff*diffusecolor.rgb;
+            clr += inddiff*diffusecolor.rgb/6;
 
-        vec3 refldir = -reflect(viewdir, worldnormal);
         vec3 spec = vec3(0., 0., 0.);
-        spec += (trace(PI/64., refldir).rgb)*1.0;
+        vec3 refldir = reflect(-viewdir, worldnormal);
+        spec += (trace(PI/64., refldir).rgb);
         if (enable_indspec)
             clr += spec*diffusecolor.rgb;
         

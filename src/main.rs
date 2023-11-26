@@ -28,13 +28,17 @@ const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const SRC_DIR: &str = concatcp!(env!("CARGO_MANIFEST_DIR"), "/src/");
 
 #[cfg(not(debug_assertions))]
-const GWIDTH: u16 = 64;
+const GWIDTH: u16 = 256;
 #[cfg(not(debug_assertions))]
 const MIPLVL: u16 = 6;
 #[cfg(not(debug_assertions))]
 const RUN_DIR: &str = ".";
 #[cfg(not(debug_assertions))]
 const SRC_DIR: &str = "./";
+
+fn itmat(input: &glm::Mat4) -> glm::Mat3 {
+    glm::transpose(&glm::inverse(&glm::mat4_to_mat3(input)))
+}
 
 fn main() {
     use glium::glutin;
@@ -178,6 +182,9 @@ fn main() {
             glutin::event::Event::MainEventsCleared => {
                 let dt = dtclock.elapsed().as_secs_f32();
                 dtclock = std::time::Instant::now();
+
+                let cwpos = ((voxelmatrix*glm::inverse(&m)*glm::vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0)).xyz() + 
+                             glm::vec3(1., 1., 1.))/2.;
                 
                 let repaint_after = egui_glium.run(&display, |egui_ctx| {
                     egui::SidePanel::left("Controls!").show(egui_ctx, |ui| {
@@ -187,6 +194,12 @@ fn main() {
                                          x = lpos.x,
                                          y = lpos.y,
                                          z = lpos.z)
+                        );
+                        ui.label(format!("Camera pos:"));
+                        ui.label(format!("x: {x}, y: {y}, z: {z}",
+                                         x = cwpos.x,
+                                         y = cwpos.y,
+                                         z = cwpos.z)
                         );
                         ui.add(egui::Slider::new(&mut kd, 0.0..=2.0).text("kd"));
                         ui.add(egui::Slider::new(&mut ks, 0.0..=2.0).text("ks"));
@@ -252,8 +265,9 @@ fn main() {
                     );
                 }
 
+
                 // voxelize
-                let normalmat = glm::inverse_transpose(voxelview*m);
+                let normalmat = itmat(&(voxelview*m));
                 for model in &models {
                     framebuffer
                         .draw(
@@ -269,7 +283,7 @@ fn main() {
                                     glium::uniforms::ImageUnitAccess::Write
                                 ),
                                 GWIDTH: GWIDTH,
-                                cameraworldpos: *camera_pos.as_ref(),
+                                cameraworldpos: *cwpos.as_ref(),
                                 image: glium::uniforms::Sampler::new(&model.material.kd),
                                 lpos: *lpos.as_ref()
                             },
@@ -296,8 +310,8 @@ fn main() {
 
                 // voxelize direct illumination
                 {
-                    let vnormalmat = glm::inverse_transpose(voxelview*voxelmatrix);
-                    let rnormalmat = glm::inverse_transpose(voxelview*m);
+                    let vnormalmat = itmat(&(voxelview*voxelmatrix));
+                    let rnormalmat = itmat(&(voxelview*m));
                     for model in &models {
                         framebuffer.draw(
                             &model.vbo,
@@ -355,6 +369,7 @@ fn main() {
                     size /= 2;
                 }
 
+
                 let mut target = display.draw();
 
                 target.clear_color(0.0, 0.0, 0.0, 1.0);
@@ -368,8 +383,9 @@ fn main() {
 
                 // draw scene
                 if !draw_grid && !draw_voxelization_camera {
-                    let vnormalmat = glm::inverse_transpose(voxelview*voxelmatrix);
-                    let rnormalmat = glm::inverse_transpose(view*m);
+                    let vnormalmat = itmat(&(voxelview*voxelmatrix));
+                    let rnormalmat = itmat(&(voxelview*m));
+
                     for model in &models {
                         target.draw(
                             &model.vbo,
@@ -389,7 +405,7 @@ fn main() {
                                 .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
                                 .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
                                 GWIDTH: GWIDTH,
-                                cameraworldpos: *camera_pos.as_ref(),
+                                cameraworldpos: *cwpos.as_ref(),
                                 enabled: enabled,
                                 lpos: *lpos.as_ref(),
                                 kd: glium::uniforms::Sampler::new(&model.material.kd),
