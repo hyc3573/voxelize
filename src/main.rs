@@ -33,6 +33,29 @@ fn itmat(input: &glm::Mat4) -> glm::Mat3 {
     glm::transpose(&glm::inverse(&glm::mat4_to_mat3(input)))
 }
 
+fn generate_mipmap(grid: &glium::texture::Texture3d, mipmapprog: &glium::program::ComputeShader, gwidth: u16, miplvl: u32, frame_counter: i32) {
+    let mut size = gwidth/2;
+    let mut factor = 1;
+    for i in 1..(miplvl-1) {
+        if frame_counter % factor == 0 {
+            mipmapprog.execute(
+                uniform! {
+                    lod: (i as i32)-1,
+                    resultimg: grid.image_unit(
+                        glium::uniforms::ImageUnitFormat::RGBA16F
+                    ).unwrap().set_access(
+                        glium::uniforms::ImageUnitAccess::Write
+                    ).set_level(i.into()).unwrap(),
+                    sampler: grid
+                },
+                size.into(), size.into(), size.into()
+            );
+        }
+        size /= 2;
+        factor *= 4;
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     
@@ -174,6 +197,8 @@ fn main() {
     let mut eis = true;
     let mut ed = true;
 
+    let mut frame_counter = 0;
+
     event_loop.run(move |ev, _, control_flow| {
         
         let next_frame_time =
@@ -293,22 +318,7 @@ fn main() {
                         ).unwrap();
                 }
 
-                let mut size = gwidth/2;
-                for i in 1..(miplvl-1) {
-                    mipmapprog.execute(
-                        uniform! {
-                            lod: (i as i32)-1,
-                            resultimg: voxelgrid1.image_unit(
-                                glium::uniforms::ImageUnitFormat::RGBA16F
-                            ).unwrap().set_access(
-                                glium::uniforms::ImageUnitAccess::Write
-                            ).set_level(i.into()).unwrap(),
-                            sampler: &voxelgrid1
-                        },
-                        size.into(), size.into(), size.into()
-                    );
-                    size /= 2;
-                }
+                generate_mipmap(&voxelgrid1, &mipmapprog, gwidth, miplvl, frame_counter);
 
                 // voxelize direct illumination
                 {
@@ -354,23 +364,8 @@ fn main() {
                         ).unwrap();
                     }
                 }
-                let mut size = gwidth;
-                for i in 1..(miplvl-1) {
-                    mipmapprog.execute(
-                        uniform! {
-                            lod: i as i32,
-                            resultimg: voxelgrid2.image_unit(
-                                glium::uniforms::ImageUnitFormat::RGBA16F
-                            ).unwrap().set_access(
-                                glium::uniforms::ImageUnitAccess::Write
-                            ).set_level(i.into()).unwrap(),
-                            sampler: &voxelgrid2
-                        },
-                        size.into(), size.into(), size.into()
-                    );
-                    size /= 2;
-                }
 
+                generate_mipmap(&voxelgrid2, &mipmapprog, gwidth, miplvl, frame_counter);
 
                 let mut target = display.draw();
 
@@ -502,6 +497,7 @@ fn main() {
                     lpos.z -= 0.1*dt;
                 }
 
+                frame_counter += 1;
             }
             glutin::event::Event::WindowEvent { event, .. } => match event {
                 glutin::event::WindowEvent::CloseRequested => {
