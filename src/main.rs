@@ -5,7 +5,7 @@ use std::{rc::Rc, default};
 use crate::load_model::load_model;
 use glium::{
     uniforms::{ImageUnitAccess, ImageUnitFormat, ImageUnit},
-    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::event::{ModifiersState, ElementState},
+    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::{event::{ModifiersState, ElementState}, platform::unix::x11::ffi::GCLineWidth},
 };
 use nalgebra_glm as glm;
 use itertools::{iproduct, Itertools};
@@ -14,23 +14,16 @@ use egui;
 use std::path::Path;
 use egui_glium;
 use const_format::concatcp;
+use std::env;
 use load_file::load_file_str;
 
 mod load_model;
 
 #[cfg(debug_assertions)]
-const GWIDTH: u16 = 64;
-#[cfg(debug_assertions)]
-const MIPLVL: u16 = 6;
-#[cfg(debug_assertions)]
 const RUN_DIR: &str = env!("CARGO_MANIFEST_DIR");
 #[cfg(debug_assertions)]
 const SRC_DIR: &str = concatcp!(env!("CARGO_MANIFEST_DIR"), "/src/");
 
-#[cfg(not(debug_assertions))]
-const GWIDTH: u16 = 256;
-#[cfg(not(debug_assertions))]
-const MIPLVL: u16 = 6;
 #[cfg(not(debug_assertions))]
 const RUN_DIR: &str = ".";
 #[cfg(not(debug_assertions))]
@@ -41,6 +34,8 @@ fn itmat(input: &glm::Mat4) -> glm::Mat3 {
 }
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    
     use glium::glutin;
 
     let mut event_loop = glutin::event_loop::EventLoop::new();
@@ -57,6 +52,13 @@ fn main() {
     let geom = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.geom"))).unwrap();
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
+
+    let mut gwidth: u16 = 128;
+    if args.len() >= 2 {
+        gwidth = args[1].parse().unwrap();
+    }
+    let gwidth = gwidth;
+    let miplvl = gwidth.ilog2();
 
     #[derive(Copy, Clone)]
     struct P2 {
@@ -84,7 +86,7 @@ fn main() {
     }
     implement_vertex!(P3, pos);
 
-    let mut grid = iproduct!((0..GWIDTH), (0..GWIDTH), (0..GWIDTH)).map(
+    let mut grid = iproduct!((0..gwidth), (0..gwidth), (0..gwidth)).map(
         |(a, b, c)| P3 {pos: [a as f32, b as f32, c as f32]}
     ).collect::<Vec<P3>>();
     let grid = glium::VertexBuffer::new(&display, &grid).unwrap();
@@ -122,13 +124,13 @@ fn main() {
     imunit_behav.format = ImageUnitFormat::RGBA16F;
     let imunit_behav = imunit_behav;
 
-    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(MIPLVL.into()), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
-    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(MIPLVL.into()), GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+    let voxelgrid1 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(miplvl.into()), gwidth.into(), gwidth.into(), gwidth.into()).unwrap();
+    let voxelgrid2 = glium::texture::texture3d::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F16F16F16F16, glium::texture::MipmapsOption::EmptyMipmapsMax(miplvl.into()), gwidth.into(), gwidth.into(), gwidth.into()).unwrap();
 
     let mut framebuffer = glium::framebuffer::EmptyFrameBuffer::new(
         &display,
-        GWIDTH.into(),
-        GWIDTH.into(),
+        gwidth.into(),
+        gwidth.into(),
         None, None, false
     ).unwrap();
 
@@ -233,7 +235,7 @@ fn main() {
                 let matrix = glm::Mat4::identity();
 
                 // clear voxel
-                for i in 0..i32::from(GWIDTH) {
+                for i in 0..i32::from(gwidth) {
                     framebuffer.draw(
                         &fullscreen_rect,
                         fullscreen_ind,
@@ -282,7 +284,7 @@ fn main() {
                                 ).unwrap().set_access(
                                     glium::uniforms::ImageUnitAccess::Write
                                 ),
-                                GWIDTH: GWIDTH,
+                                GWIDTH: gwidth,
                                 cameraworldpos: *cwpos.as_ref(),
                                 image: glium::uniforms::Sampler::new(&model.material.kd),
                                 lpos: *lpos.as_ref()
@@ -291,8 +293,8 @@ fn main() {
                         ).unwrap();
                 }
 
-                let mut size = GWIDTH/2;
-                for i in 1..(MIPLVL-1) {
+                let mut size = gwidth/2;
+                for i in 1..(miplvl-1) {
                     mipmapprog.execute(
                         uniform! {
                             lod: (i as i32)-1,
@@ -330,7 +332,7 @@ fn main() {
                                     .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
                                     .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
                                     .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
-                                GWIDTH: GWIDTH,
+                                GWIDTH: gwidth,
                                 cameraworldpos: *(camera_pos).as_ref(),
                                 enabled: true,
                                 lpos: *lpos.as_ref(),
@@ -352,8 +354,8 @@ fn main() {
                         ).unwrap();
                     }
                 }
-                let mut size = GWIDTH;
-                for i in 1..(MIPLVL-1) {
+                let mut size = gwidth;
+                for i in 1..(miplvl-1) {
                     mipmapprog.execute(
                         uniform! {
                             lod: i as i32,
@@ -404,7 +406,7 @@ fn main() {
                                 .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
                                 .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
                                 .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
-                                GWIDTH: GWIDTH,
+                                GWIDTH: gwidth,
                                 cameraworldpos: *cwpos.as_ref(),
                                 enabled: enabled,
                                 lpos: *lpos.as_ref(),
