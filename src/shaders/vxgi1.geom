@@ -3,10 +3,10 @@
 layout (triangles) in;
 layout (triangle_strip, max_vertices=3) out;
 
-layout (location=0) in vec3 wrdnrmIn[];
-layout (location=1) in vec2 texcrdIn[];
-layout (location=2) in vec3 wrdposIn[];
-layout (location=3) in vec3 lwdposIn[];
+layout (location=0) in vec3 _worldnormal[];
+layout (location=1) in vec2 texcoord[];
+layout (location=2) in vec3 worldpos[];
+layout (location=3) in vec3 lworldpos[];
 
 layout (location=0) out vec3 wrdnrmOut;
 layout (location=1) out vec2 texcrdOut;
@@ -43,10 +43,10 @@ void main() {
         }
     
         gl_Position = vec4(newpos[i], 1.0);
-        wrdnrmOut = wrdnrmIn[i];
-        texcrdOut = texcrdIn[i];
-        wrdposOut = wrdposIn[i];
-        lwdposOut = lwdposIn[i];
+        wrdnrmOut = _worldnormal[i];
+        texcrdOut = texcoord[i];
+        wrdposOut = worldpos[i];
+        lwdposOut = lworldpos[i];
         EmitVertex();
     }
 

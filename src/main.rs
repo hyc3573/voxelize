@@ -5,8 +5,9 @@ use std::{rc::Rc, default};
 use crate::load_model::load_model;
 use glium::{
     uniforms::{ImageUnitAccess, ImageUnitFormat, ImageUnit},
-    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}, glutin::{event::{ModifiersState, ElementState}, platform::unix::x11::ffi::GCLineWidth},
+    Surface, texture::TextureAnyImage, backend::Facade, framebuffer::{self, SimpleFrameBuffer}
 };
+use winit::{self, event::{self, ElementState}};
 use nalgebra_glm as glm;
 use itertools::{iproduct, Itertools};
 use image;
@@ -16,6 +17,7 @@ use egui_glium;
 use const_format::concatcp;
 use std::env;
 use load_file::load_file_str;
+use egui::ViewportId;
 
 mod load_model;
 
@@ -59,16 +61,18 @@ fn generate_mipmap(grid: &glium::texture::Texture3d, mipmapprog: &glium::program
 fn main() {
     let args: Vec<String> = env::args().collect();
     
-    use glium::glutin;
+    use glium::backend::glutin;
 
-    let mut event_loop = glutin::event_loop::EventLoop::new();
-    let wb = glutin::window::WindowBuilder::new();
-    let cb = glutin::ContextBuilder::new();
-    let display = glium::Display::new(wb, cb, &event_loop).unwrap();
-    let mut egui_glium = egui_glium::EguiGlium::new(&display, &event_loop);
+    // let mut event_loop = glutin::event_loop::EventLoop::new();
+    let event_loop = winit::event_loop::EventLoopBuilder::new().build().expect("event loop building");
+    //  let wb = glutin::window::WindowBuilder::new();
+    // let cb = glutin::ContextBuilder::new();
+    // let display = glium::Display::new(wb, cb, &event_loop).unwrap();
+    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new().build(&event_loop);
+    let mut egui_glium = egui_glium::EguiGlium::new(ViewportId::ROOT, &display, &window, &event_loop);
 
     let (models, m, voxelmatrix) = load_model(Path::new(concatcp!(RUN_DIR, "/models/sponza.obj")),
-                                 Path::new(RUN_DIR), &display);
+                                              Path::new(RUN_DIR), &display);
 
     let frag = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.frag"))).unwrap();
     let vert = load_file_str(Path::new(concatcp!(SRC_DIR, "shaders/voxelize.vert"))).unwrap();
@@ -76,7 +80,7 @@ fn main() {
 
     let program = glium::Program::from_source(&display, vert, frag, Some(geom)).unwrap();
 
-    let mut gwidth: u16 = 128;
+    let mut gwidth: u16 = 256;
     if args.len() >= 2 {
         gwidth = args[1].parse().unwrap();
     }
@@ -199,391 +203,403 @@ fn main() {
 
     let mut frame_counter = 0;
 
-    event_loop.run(move |ev, _, control_flow| {
+    event_loop.run(move |event, target| {
         
         let next_frame_time =
             std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
-        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+        // *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
         // *control_flow = glutin::event_loop::ControlFlow::Poll;
-        match ev {
-            glutin::event::Event::MainEventsCleared => {
-                let dt = dtclock.elapsed().as_secs_f32();
-                dtclock = std::time::Instant::now();
+        match event {
+            winit::event::Event::WindowEvent { event, .. } => {
+                use event::WindowEvent;
+                match event {
+                    WindowEvent::CloseRequested | WindowEvent::Destroyed => {
+                        target.exit();
+                    },
+                    WindowEvent::RedrawRequested => {
+                        
+                        let dt = dtclock.elapsed().as_secs_f32();
+                        dtclock = std::time::Instant::now();
 
-                let cwpos = ((voxelmatrix*glm::inverse(&m)*glm::vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0)).xyz() + 
-                             glm::vec3(1., 1., 1.))/2.;
-                
-                let repaint_after = egui_glium.run(&display, |egui_ctx| {
-                    egui::SidePanel::left("Controls!").show(egui_ctx, |ui| {
-                        ui.heading(format!("FPS: {}", 1./dt));
-                        ui.label(format!("Light pos:"));
-                        ui.label(format!("x: {x}, y: {y}, z: {z}",
-                                         x = lpos.x,
-                                         y = lpos.y,
-                                         z = lpos.z)
+                        let cwpos = ((voxelmatrix*glm::inverse(&m)*glm::vec4(camera_pos.x, camera_pos.y, camera_pos.z, 1.0)).xyz() + 
+                                     glm::vec3(1., 1., 1.))/2.;
+                        
+                        let repaint_after = egui_glium.run(&window, |egui_ctx| {
+                            egui::SidePanel::left("Controls!").show(egui_ctx, |ui| {
+                                ui.heading(format!("FPS: {}", 1./dt));
+                                ui.label(format!("Light pos:"));
+                                ui.label(format!("x: {x}, y: {y}, z: {z}",
+                                                 x = lpos.x,
+                                                 y = lpos.y,
+                                                 z = lpos.z)
+                                );
+                                ui.label(format!("Camera pos:"));
+                                ui.label(format!("x: {x}, y: {y}, z: {z}",
+                                                 x = cwpos.x,
+                                                 y = cwpos.y,
+                                                 z = cwpos.z)
+                                );
+                                ui.add(egui::Slider::new(&mut kd, 0.0..=2.0).text("kd"));
+                                ui.add(egui::Slider::new(&mut ks, 0.0..=2.0).text("ks"));
+                                ui.add(egui::Slider::new(&mut kid, 0.0..=2.0).text("kid"));
+                                ui.add(egui::Slider::new(&mut kis, 0.0..=2.0).text("kis"));
+                                ui.toggle_value(&mut only_occ, "Only occlusion");
+                                ui.toggle_value(&mut eid, "Indirect Diffuse");
+                                ui.toggle_value(&mut eis, "Indirect Specular");
+                                ui.toggle_value(&mut ed, "Direct");
+                                ui.add(egui::Slider::new(&mut speed, 0.0..=5.0).text("speed"));
+                            });
+                        });
+                        
+                        let voxelview = glm::Mat4::identity(); 
+                        let voxelproj = glm::Mat4::identity(); 
+                        // let voxelgrid = glium::texture::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
+                        // let normalmat = glm::inverse_transpose(m.ad_solve_upper_triangular_mut);
+
+                        let matrix = glm::translation::<f32>(
+                            &glm::vec3(0., 0., -3.)
+                        )*glm::rotation::<f32>(
+                            t.elapsed().as_secs_f32(), &glm::vec3(0., 1., 0.),
                         );
-                        ui.label(format!("Camera pos:"));
-                        ui.label(format!("x: {x}, y: {y}, z: {z}",
-                                         x = cwpos.x,
-                                         y = cwpos.y,
-                                         z = cwpos.z)
-                        );
-                        ui.add(egui::Slider::new(&mut kd, 0.0..=2.0).text("kd"));
-                        ui.add(egui::Slider::new(&mut ks, 0.0..=2.0).text("ks"));
-                        ui.add(egui::Slider::new(&mut kid, 0.0..=2.0).text("kid"));
-                        ui.add(egui::Slider::new(&mut kis, 0.0..=2.0).text("kis"));
-                        ui.toggle_value(&mut only_occ, "Only occlusion");
-                        ui.toggle_value(&mut eid, "Indirect Diffuse");
-                        ui.toggle_value(&mut eis, "Indirect Specular");
-                        ui.toggle_value(&mut ed, "Direct");
-                        ui.add(egui::Slider::new(&mut speed, 0.0..=5.0).text("speed"));
-                    });
-                });
-                
-                let voxelview = glm::Mat4::identity(); 
-                let voxelproj = glm::Mat4::identity(); 
-                // let voxelgrid = glium::texture::Texture3d::empty_with_format(&display, glium::texture::UncompressedFloatFormat::F32F32F32F32, glium::texture::MipmapsOption::NoMipmap, GWIDTH.into(), GWIDTH.into(), GWIDTH.into()).unwrap();
-                // let normalmat = glm::inverse_transpose(m.ad_solve_upper_triangular_mut);
+                        let matrix = glm::perspective::<f32>(
+                            1.,
+                            glm::pi::<f32>()/4.0,
+                            0.1,
+                            100.
+                        )*voxelview*m;
+                        let matrix = voxelproj*voxelview*m;
+                        let matrix = glm::Mat4::identity();
 
-                let matrix = glm::translation::<f32>(
-                    &glm::vec3(0., 0., -3.)
-                )*glm::rotation::<f32>(
-                    t.elapsed().as_secs_f32(), &glm::vec3(0., 1., 0.),
-                );
-                let matrix = glm::perspective::<f32>(
-                    1.,
-                    glm::pi::<f32>()/4.0,
-                    0.1,
-                    100.
-                )*voxelview*m;
-                let matrix = voxelproj*voxelview*m;
-                let matrix = glm::Mat4::identity();
-
-                // clear voxel
-                for i in 0..i32::from(gwidth) {
-                    framebuffer.draw(
-                        &fullscreen_rect,
-                        fullscreen_ind,
-                        &clearprog,
-                        &uniform! {
-                            grid: voxelgrid1.image_unit(
-                                glium::uniforms::ImageUnitFormat::RGBA16F
-                            ).unwrap().set_access(
-                                glium::uniforms::ImageUnitAccess::Write
-                            ),
-                            depth: i,
-                        },
-                        &Default::default()
-                    ).unwrap();
-
-                    framebuffer.draw(
-                        &fullscreen_rect,
-                        fullscreen_ind,
-                        &clearprog,
-                        &uniform! {
-                            grid: voxelgrid2.image_unit(
-                                glium::uniforms::ImageUnitFormat::RGBA16F
-                            ).unwrap().set_access(
-                                glium::uniforms::ImageUnitAccess::Write
-                            ),
-                            depth: 1,
-                        },
-                        &Default::default()
-                    );
-                }
-
-
-                // voxelize
-                let normalmat = itmat(&(voxelview*m));
-                for model in &models {
-                    framebuffer
-                        .draw(
-                            &model.vbo,
-                            &model.ibo,
-                            &program,
-                            &uniform! {
-                                M: *voxelmatrix.as_ref(),
-                                VNM: *(normalmat).as_ref(),
-                                grid: voxelgrid1.image_unit(
-                                    glium::uniforms::ImageUnitFormat::RGBA16F
-                                ).unwrap().set_access(
-                                    glium::uniforms::ImageUnitAccess::Write
-                                ),
-                                GWIDTH: gwidth,
-                                cameraworldpos: *cwpos.as_ref(),
-                                image: glium::uniforms::Sampler::new(&model.material.kd),
-                                lpos: *lpos.as_ref()
-                            },
-                            &Default::default(),
-                        ).unwrap();
-                }
-
-                generate_mipmap(&voxelgrid1, &mipmapprog, gwidth, miplvl, frame_counter);
-
-                // voxelize direct illumination
-                {
-                    let vnormalmat = itmat(&(voxelview*voxelmatrix));
-                    let rnormalmat = itmat(&(voxelview*m));
-                    for model in &models {
-                        framebuffer.draw(
-                            &model.vbo,
-                            &model.ibo,
-                            &vxgi1prog_geom,
-                            &uniform! {
-                                M: *voxelmatrix.as_ref(),
-                                V: *(voxelview).as_ref(),
-                                P: *voxelproj.as_ref(),
-                                VP: *voxelproj.as_ref(),
-                                VV: *voxelview.as_ref(),
-                                VM: *voxelmatrix.as_ref(),
-                                VNM: *vnormalmat.as_ref(),
-                                RNM: *rnormalmat.as_ref(),
-                                grid: glium::uniforms::Sampler::new(&voxelgrid1)
-                                    .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
-                                    .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-                                    .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
-                                GWIDTH: gwidth,
-                                cameraworldpos: *(camera_pos).as_ref(),
-                                enabled: true,
-                                lpos: *lpos.as_ref(),
-                                kd: glium::uniforms::Sampler::new(&model.material.kd),
-                                ks: glium::uniforms::Sampler::new(&model.material.ks),
-                                shininess: model.shininess,
-                                only_occ: true,
-                                enable_indspec: false,
-                                enable_inddiff: false,
-                                enable_dir: true,
-                                write_vox: true,
-                                wgrid: voxelgrid2.image_unit(
-                                    glium::uniforms::ImageUnitFormat::RGBA16F
-                                ).unwrap().set_access(
-                                    glium::uniforms::ImageUnitAccess::Write
-                                )
-                            },
-                            &Default::default()
-                        ).unwrap();
-                    }
-                }
-
-                generate_mipmap(&voxelgrid2, &mipmapprog, gwidth, miplvl, frame_counter);
-
-                let mut target = display.draw();
-
-                target.clear_color(0.0, 0.0, 0.0, 1.0);
-                target.clear_depth(1.0);
-
-                let view = glm::look_at::<f32>(
-                    &camera_pos, &(camera_pos+camera_dir), &glm::vec3(0., 1., 0.)
-                );
-                let pers = glm::perspective(1., glm::pi::<f32>()/4., 0.01, 100.);
-                let model_rot_mat = glm::rotation::<f32>(model_rot, &glm::vec3(0., 1., 0.));
-
-                // draw scene
-                if !draw_grid && !draw_voxelization_camera {
-                    let vnormalmat = itmat(&(voxelview*voxelmatrix));
-                    let rnormalmat = itmat(&(voxelview*m));
-
-                    for model in &models {
-                        target.draw(
-                            &model.vbo,
-                            &model.ibo,
-                            &vxgi1prog,
-                            &uniform! {
-                                M: *m.as_ref(),
-                                V: *view.as_ref(),
-                                P: *pers.as_ref(),
-                                VP: *voxelproj.as_ref(),
-                                VV: *voxelview.as_ref(),
-                                VM: *voxelmatrix.as_ref(),
-                                VNM: *vnormalmat.as_ref(),
-                                RNM: *rnormalmat.as_ref(),
-                                grid: glium::uniforms::Sampler::new(&voxelgrid2)
-                                .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
-                                .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-                                .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
-                                GWIDTH: gwidth,
-                                cameraworldpos: *cwpos.as_ref(),
-                                enabled: enabled,
-                                lpos: *lpos.as_ref(),
-                                kd: glium::uniforms::Sampler::new(&model.material.kd),
-                                ks: glium::uniforms::Sampler::new(&model.material.ks),
-                                shininess: model.shininess,
-                                only_occ: only_occ,
-                                enable_indspec: eis,
-                                enable_inddiff: eid,
-                                enable_dir: ed,
-                                write_vox: false
-                            },
-                            &glium::DrawParameters {
-                                depth: glium::Depth {
-                                    test: glium::draw_parameters::DepthTest::IfLess,
-                                    write: true,
-                                    ..Default::default()
+                        // clear voxel
+                        for i in 0..i32::from(gwidth) {
+                            framebuffer.draw(
+                                &fullscreen_rect,
+                                fullscreen_ind,
+                                &clearprog,
+                                &uniform! {
+                                    grid: voxelgrid1.image_unit(
+                                        glium::uniforms::ImageUnitFormat::RGBA16F
+                                    ).unwrap().set_access(
+                                        glium::uniforms::ImageUnitAccess::Write
+                                    ),
+                                    depth: i,
                                 },
-                                blend: glium::Blend::alpha_blending(),
-                                ..Default::default()
+                                &Default::default()
+                            ).unwrap();
+
+                            framebuffer.draw(
+                                &fullscreen_rect,
+                                fullscreen_ind,
+                                &clearprog,
+                                &uniform! {
+                                    grid: voxelgrid2.image_unit(
+                                        glium::uniforms::ImageUnitFormat::RGBA16F
+                                    ).unwrap().set_access(
+                                        glium::uniforms::ImageUnitAccess::Write
+                                    ),
+                                    depth: 1,
+                                },
+                                &Default::default()
+                            );
+                        }
+
+
+                        // voxelize
+                        let normalmat = itmat(&(voxelview*m));
+                        for model in &models {
+                            framebuffer
+                                .draw(
+                                    &model.vbo,
+                                    &model.ibo,
+                                    &program,
+                                    &uniform! {
+                                        M: *voxelmatrix.as_ref(),
+                                        VNM: *(normalmat).as_ref(),
+                                        grid: voxelgrid1.image_unit(
+                                            glium::uniforms::ImageUnitFormat::RGBA16F
+                                        ).unwrap().set_access(
+                                            glium::uniforms::ImageUnitAccess::Write
+                                        ),
+                                        GWIDTH: gwidth,
+                                        cameraworldpos: *cwpos.as_ref(),
+                                        image: glium::uniforms::Sampler::new(&model.material.kd),
+                                        lpos: *lpos.as_ref()
+                                    },
+                                    &Default::default(),
+                                ).unwrap();
+                        }
+
+                        generate_mipmap(&voxelgrid1, &mipmapprog, gwidth, miplvl, frame_counter);
+
+                        // voxelize direct illumination
+                        {
+                            let vnormalmat = itmat(&(voxelview*voxelmatrix));
+                            let rnormalmat = itmat(&(voxelview*m));
+                            for model in &models {
+                                framebuffer.draw(
+                                    &model.vbo,
+                                    &model.ibo,
+                                    &vxgi1prog_geom,
+                                    &uniform! {
+                                        M: *voxelmatrix.as_ref(),
+                                        V: *(voxelview).as_ref(),
+                                        P: *voxelproj.as_ref(),
+                                        VP: *voxelproj.as_ref(),
+                                        VV: *voxelview.as_ref(),
+                                        VM: *voxelmatrix.as_ref(),
+                                        VNM: *vnormalmat.as_ref(),
+                                        RNM: *rnormalmat.as_ref(),
+                                        grid: glium::uniforms::Sampler::new(&voxelgrid1)
+                                            .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
+                                            .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+                                            .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
+                                        GWIDTH: gwidth,
+                                        cameraworldpos: *(camera_pos).as_ref(),
+                                        enabled: true,
+                                        lpos: *lpos.as_ref(),
+                                        kd: glium::uniforms::Sampler::new(&model.material.kd),
+                                        ks: glium::uniforms::Sampler::new(&model.material.ks),
+                                        shininess: model.shininess,
+                                        only_occ: true,
+                                        enable_indspec: false,
+                                        enable_inddiff: false,
+                                        enable_dir: true,
+                                        write_vox: true,
+                                        wgrid: voxelgrid2.image_unit(
+                                            glium::uniforms::ImageUnitFormat::RGBA16F
+                                        ).unwrap().set_access(
+                                            glium::uniforms::ImageUnitAccess::Write
+                                        )
+                                    },
+                                    &Default::default()
+                                ).unwrap();
                             }
-                        ).unwrap();
+                        }
+
+                        generate_mipmap(&voxelgrid2, &mipmapprog, gwidth, miplvl, frame_counter);
+
+                        let mut target = display.draw();
+
+                        target.clear_color(0.0, 0.0, 0.0, 1.0);
+                        target.clear_depth(1.0);
+
+                        let view = glm::look_at::<f32>(
+                            &camera_pos, &(camera_pos+camera_dir), &glm::vec3(0., 1., 0.)
+                        );
+                        let pers = glm::perspective(1., glm::pi::<f32>()/4., 0.01, 100.);
+                        let model_rot_mat = glm::rotation::<f32>(model_rot, &glm::vec3(0., 1., 0.));
+
+                        // draw scene
+                        if !draw_grid && !draw_voxelization_camera {
+                            let vnormalmat = itmat(&(voxelview*voxelmatrix));
+                            let rnormalmat = itmat(&(voxelview*m));
+
+                            for model in &models {
+                                target.draw(
+                                    &model.vbo,
+                                    &model.ibo,
+                                    &vxgi1prog,
+                                    &uniform! {
+                                        M: *m.as_ref(),
+                                        V: *view.as_ref(),
+                                        P: *pers.as_ref(),
+                                        VP: *voxelproj.as_ref(),
+                                        VV: *voxelview.as_ref(),
+                                        VM: *voxelmatrix.as_ref(),
+                                        VNM: *vnormalmat.as_ref(),
+                                        RNM: *rnormalmat.as_ref(),
+                                        grid: glium::uniforms::Sampler::new(&voxelgrid2)
+                                            .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
+                                            .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+                                            .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp),
+                                        GWIDTH: gwidth,
+                                        cameraworldpos: *cwpos.as_ref(),
+                                        enabled: enabled,
+                                        lpos: *lpos.as_ref(),
+                                        kd: glium::uniforms::Sampler::new(&model.material.kd),
+                                        ks: glium::uniforms::Sampler::new(&model.material.ks),
+                                        shininess: model.shininess,
+                                        only_occ: only_occ,
+                                        enable_indspec: eis,
+                                        enable_inddiff: eid,
+                                        enable_dir: ed,
+                                        write_vox: false
+                                    },
+                                    &glium::DrawParameters {
+                                        depth: glium::Depth {
+                                            test: glium::draw_parameters::DepthTest::IfLess,
+                                            write: true,
+                                            ..Default::default()
+                                        },
+                                        blend: glium::Blend::alpha_blending(),
+                                        ..Default::default()
+                                    }
+                                ).unwrap();
+                            }
+                        }
+
+                        egui_glium.paint(&display, &mut target);
+
+                        target.finish().unwrap();               
+
+                        let angspeed = glm::pi::<f32>()/2.;
+                        if key_w {
+                            camera_pos += camera_dir*speed*dt;
+                        }
+                        if key_s {
+                            camera_pos -= camera_dir*speed*dt;
+                        }
+                        if key_a {
+                            camera_pos -= glm::cross(&camera_dir, &camera_up)*speed*dt;
+                        }
+                        if key_d {
+                            camera_pos += glm::cross(&camera_dir, &camera_up)*speed*dt;
+                        }
+                        if key_shift {
+                            camera_pos -= camera_up*speed*dt;
+                        }
+                        if key_space {
+                            camera_pos += camera_up*speed*dt;
+                        }
+                        if key_up {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                angspeed*dt,
+                                &glm::cross(&camera_dir, &camera_up)
+                            )
+                        }
+                        if key_down {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                -angspeed*dt,
+                                &glm::cross(&camera_dir, &camera_up)
+                            )
+                        }
+                        if key_left {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                angspeed*dt,
+                                &camera_up
+                            )
+                        }
+                        if key_right {
+                            camera_dir = glm::rotate_vec3(
+                                &camera_dir,
+                                -angspeed*dt,
+                                &camera_up
+                            )
+                        }
+                        if key_i {
+                            lpos.y += 0.1*dt;
+                        }
+                        if key_j {
+                            lpos.x += 0.1*dt;
+                        }
+                        if key_k {
+                            lpos.y -= 0.1*dt;
+                        }
+                        if key_l {
+                            lpos.x -= 0.1*dt;
+                        }
+                        if key_n {
+                            lpos.z += 0.1*dt;
+                        }
+                        if key_m {
+                            lpos.z -= 0.1*dt;
+                        }
+
+                        frame_counter += 1;
                     }
-                }
+                    WindowEvent::Resized(new_size) => {
+                        display.resize(new_size.into());
+                    }
+                    WindowEvent::KeyboardInput {ref event, ..} => {
+                        use winit::keyboard::{Key, NamedKey};
+                        let pressed = event.state == ElementState::Pressed;
 
-                egui_glium.paint(&display, &mut target);
-
-                target.finish().unwrap();               
-
-                let angspeed = glm::pi::<f32>()/2.;
-                if key_w {
-                    camera_pos += camera_dir*speed*dt;
-                }
-                if key_s {
-                    camera_pos -= camera_dir*speed*dt;
-                }
-                if key_a {
-                    camera_pos -= glm::cross(&camera_dir, &camera_up)*speed*dt;
-                }
-                if key_d {
-                    camera_pos += glm::cross(&camera_dir, &camera_up)*speed*dt;
-                }
-                if key_shift {
-                    camera_pos -= camera_up*speed*dt;
-                }
-                if key_space {
-                    camera_pos += camera_up*speed*dt;
-                }
-                if key_up {
-                    camera_dir = glm::rotate_vec3(
-                        &camera_dir,
-                        angspeed*dt,
-                        &glm::cross(&camera_dir, &camera_up)
-                    )
-                }
-                if key_down {
-                    camera_dir = glm::rotate_vec3(
-                        &camera_dir,
-                        -angspeed*dt,
-                        &glm::cross(&camera_dir, &camera_up)
-                    )
-                }
-                if key_left {
-                    camera_dir = glm::rotate_vec3(
-                        &camera_dir,
-                        angspeed*dt,
-                        &camera_up
-                    )
-                }
-                if key_right {
-                    camera_dir = glm::rotate_vec3(
-                        &camera_dir,
-                        -angspeed*dt,
-                        &camera_up
-                    )
-                }
-                if key_i {
-                    lpos.y += 0.1*dt;
-                }
-                if key_j {
-                    lpos.x += 0.1*dt;
-                }
-                if key_k {
-                    lpos.y -= 0.1*dt;
-                }
-                if key_l {
-                    lpos.x -= 0.1*dt;
-                }
-                if key_n {
-                    lpos.z += 0.1*dt;
-                }
-                if key_m {
-                    lpos.z -= 0.1*dt;
-                }
-
-                frame_counter += 1;
-            }
-            glutin::event::Event::WindowEvent { event, .. } => match event {
-                glutin::event::WindowEvent::CloseRequested => {
-                    *control_flow = glutin::event_loop::ControlFlow::Exit;
-                },
-                glutin::event::WindowEvent::KeyboardInput {input, ..} => {
-                    if let glutin::event::KeyboardInput{virtual_keycode, state, ..} = input {
-                        let pressed = state == ElementState::Pressed;
-                        match virtual_keycode {
-                            Some(glutin::event::VirtualKeyCode::W) => {
+                        if let Key::Character(ref c) = event.logical_key {
+                            if c == "w" {
                                 key_w = pressed
                             }
-                            Some(glutin::event::VirtualKeyCode::S) => {
-                                key_s= pressed;
+                            if c == "s" {
+                                key_s = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::A) => {
+                            if c == "a" {
                                 key_a = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::D) => {
+                            if c == "d" {
                                 key_d = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::Space) => {
-                                key_space = pressed;
-                            }
-                            Some(glutin::event::VirtualKeyCode::LShift) => {
-                                key_shift = pressed;
-                            }
-                            Some(glutin::event::VirtualKeyCode::Up) => {
-                                key_up = pressed;
-                            }
-                            Some(glutin::event::VirtualKeyCode::Down) => {
-                                key_down = pressed;
-                            }
-                            Some(glutin::event::VirtualKeyCode::Left) => {
-                                key_left = pressed;
-                            }
-                            Some(glutin::event::VirtualKeyCode::Right) => {
-                                key_right = pressed;
-                            }
-                            Some(glutin::event::VirtualKeyCode::I) => {
+                            if c == "i" {
                                 key_i = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::J) => {
+                            if c == "j" {
                                 key_j = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::K) => {
+                            if c == "k" {
                                 key_k = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::L) => {
+                            if c == "l" {
                                 key_l = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::N) => {
+                            if c == "n" {
                                 key_n = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::M) => {
+                            if c == "m" {
                                 key_m = pressed;
                             }
-                            Some(glutin::event::VirtualKeyCode::T) => {
+                            if c == "t" {
                                 if pressed {
                                     draw_grid = !draw_grid;
                                 }
                             }
-                            Some(glutin::event::VirtualKeyCode::V) => {
+                            if c == "v" {
                                 if pressed {
                                     draw_voxelization_camera = !draw_voxelization_camera
                                 }
                             }
-                            Some(glutin::event::VirtualKeyCode::C) => {
+                            if c == "c" {
                                 if pressed {
                                     enabled = !enabled;
                                 }
                             }
-                            Some(glutin::event::VirtualKeyCode::P) => {
+                            if c == "p" {
                                 model_rot += 0.1;
                             }
-                            Some(glutin::event::VirtualKeyCode::O) => {
+                            if c == "o" {
                                 model_rot += -0.1;
+                            }
+                        }
+                        match event.logical_key {
+                            Key::Named(NamedKey::Space) => {
+                                key_space = pressed;
+                            }
+                            Key::Named(NamedKey::Shift) => {
+                                key_shift = pressed;
+                            }
+                            Key::Named(NamedKey::ArrowUp) => {
+                                key_up = pressed;
+                            }
+                            Key::Named(NamedKey::ArrowDown) => {
+                                key_down = pressed;
+                            }
+                            Key::Named(NamedKey::ArrowLeft) => {
+                                key_left = pressed;
+                            }
+                            Key::Named(NamedKey::ArrowRight) => {
+                                key_right = pressed;
                             }
                             _ => ()
                         }
+                        
                     }
+                    _ => {},
                 }
-                event => {
-                    egui_glium.on_event(&event);
+
+                let event_response = egui_glium.on_event(&window, &event);
+                if event_response.repaint {
+                    window.request_redraw();
                 }
-                _ => return,
             },
             _ => (),
         }

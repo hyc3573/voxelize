@@ -6,14 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tobj = {version="4.0.0", features=["reordering"]}
-glium = "0.32.1"
-glam = "*"
-nalgebra-glm = "*"
-nalgebra = "*"
-itertools = "*"
+# tobj = {version="4.0.0", features=["reordering"]}
+tobj = {version="4.0.2", features=["reordering"]}
+glium = {version="0.34", features=["simple_window_builder"]}
+winit = "*"
+glam = "0.29.0"
+nalgebra-glm = "0.19.0"
+# nalgebra = ""
+itertools = "0.13.0"
 image = "0.24"
-egui_glium = "0.20.1"
-egui = "0.20.1"
+# egui_glium = "0.20.1"
+egui_glium = "0.26"
+# egui = "0.20.1"
+egui = "*"
 const_format = "0.2.31"
-load_file = "*"
+load_file = "1.0.1"
