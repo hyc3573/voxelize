@@ -1,1 +1,3 @@
-할일: indirect 라이팅에 occlusion이 반영되어야 함.
+https://research.nvidia.com/publication/2011-09_interactive-indirect-illumination-using-voxel-cone-tracing의 구현
+
+Used libraries: glium (OpenGL Wrapper)
